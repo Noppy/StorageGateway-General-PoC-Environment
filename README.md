@@ -263,8 +263,21 @@ aws --profile ${PROFILE} \
         --port 3389 \
         --cidr 0.0.0.0/0 ;
 ```
+(iii) Client識別用 Security Group
+```shell
+# クライアント識別用セキュリティーグループ作成
+CLIENT_SG_ID=$(aws --profile ${PROFILE} --output text \
+    ec2 create-security-group \
+        --group-name ClientSG \
+        --description "Allow rdp" \
+        --vpc-id ${VPCID}) ;
 
-(iii) Manager - SSHログイン用 Security Group
+aws --profile ${PROFILE} \
+    ec2 create-tags \
+        --resources ${CLIENT_SG_ID} \
+        --tags "Key=Name,Value=ClientSG" ;
+```
+(iv) Manager - SSHログイン用 Security Group
 ```shell
 # SSHログイン用セキュリティーグループ作成
 MGR_SSH_SG_ID=$(aws --profile ${PROFILE} --output text \
@@ -308,6 +321,7 @@ echo -e "KEYNAME=${KEYNAME}\nAL2_AMIID=${AL2_AMIID}\nWIN2019_AMIID=${WIN2019_AMI
 ```
 ### (3)-(c) Liunux-Client作成
 ```shell
+INSTANCE_TYPE=t2.xlarge
 TAGJSON='
 [
     {
@@ -332,16 +346,17 @@ hostnamectl set-hostname Linux-Client
 aws --profile ${PROFILE} \
     ec2 run-instances \
         --image-id ${AL2_AMIID} \
-        --instance-type t2.micro \
+        --instance-type ${INSTANCE_TYPE} \
         --key-name ${KEYNAME} \
         --subnet-id ${PublicSubnet1Id} \
-        --security-group-ids ${SSH_SG_ID}\
+        --security-group-ids ${SSH_SG_ID} ${CLIENT_SG_ID}\
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" \
         --user-data "${USER_DATA}" ;
 ```
 ### (3)-(d) Windows-Client作成
 ```shell
+INSTANCE_TYPE=t2.xlarge
 TAGJSON='
 [
     {
@@ -359,10 +374,10 @@ TAGJSON='
 aws --profile ${PROFILE} \
     ec2 run-instances \
         --image-id ${WIN2019_AMIID} \
-        --instance-type t2.2xlarge \
+        --instance-type ${INSTANCE_TYPE} \
         --key-name ${KEYNAME} \
         --subnet-id ${PublicSubnet1Id} \
-        --security-group-ids ${RDP_SG_ID}\
+        --security-group-ids ${RDP_SG_ID} ${CLIENT_SG_ID}\
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" ;
 ```
@@ -400,29 +415,28 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" \
         --user-data "${USER_DATA}" ;
 ```
-
-
-
-echo -e "VPCID=$VPCID\nVPC_CIDR=$VPC_CIDR\nPublicSubnet1Id =$PublicSubnet1Id\nPublicSubnet2Id =$PublicSubnet2Id\nPrivateSubnet1Id=$PrivateSubnet1Id\nPrivateSubnet2Id=$PrivateSubnet2Id\nPrivateSubnet1RouteTableId=$PrivateSubnet1RouteTableId \nPrivateSubnet2RouteTableId=$PrivateSubnet2RouteTableId"
-
-
-
-
-
-
-
-
-
-
-
-
-## (5) StorageGateway作成(事前準備)
+## (4) StorageGateway作成(事前準備)
 Storage Gatewayで利用するS3のバケットと、S3アクセス用にStorage Gatewayが利用するIAMロールを作成します。
 <center><img src="./Documents/Step5.png" whdth=500></center>
 
-### (5)-(a) StorageGateway用のSecurityGroup作成
+### (4)-(a) StorageGateway用のSecurityGroup作成
 (i) SGW用 Security Group
 ```shell
+# セキュリティーグループID取得
+
+#Security Group ID取得
+CLIENT_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=ClientSG' \
+        --query 'SecurityGroups[].GroupId');
+
+MGR_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=Mgr-SshSG' \
+        --query 'SecurityGroups[].GroupId');
+
+echo -e "CLIENT_SG_ID=${CLIENT_SG_ID}\nMGR_SG_ID   =${MGR_SG_ID}"
+
 # SGW用セキュリティーグループ作成
 SGW_SG_ID=$(aws --profile ${PROFILE} --output text \
     ec2 create-security-group \
@@ -442,7 +456,7 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 80 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${MGR_SG_ID} ;
 
 # gatewayへのコンソールログインのため
 aws --profile ${PROFILE} \
@@ -450,7 +464,7 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 22 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${MGR_SG_ID} ;
 
 # クライアントとのSMB接続(1)
 aws --profile ${PROFILE} \
@@ -458,7 +472,7 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 139 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${CLIENT_SG_ID} ;
 
 # クライアントとのSMB接続(2)
 aws --profile ${PROFILE} \
@@ -466,7 +480,7 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 445 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${CLIENT_SG_ID} ;
 
 # クライアントとのNFS接続(1) NFS
 aws --profile ${PROFILE} \
@@ -474,7 +488,7 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 2049 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${CLIENT_SG_ID} ;
 
 # クライアントとのNFS接続(2) rpcbind/sunrpc for NFSv3
 aws --profile ${PROFILE} \
@@ -482,7 +496,7 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 111 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${CLIENT_SG_ID} ;
 
 # クライアントとのNFS接続(3) gensha for NFSv3
 aws --profile ${PROFILE} \
@@ -490,9 +504,9 @@ aws --profile ${PROFILE} \
         --group-id ${SGW_SG_ID} \
         --protocol tcp \
         --port 20048 \
-        --cidr 0.0.0.0/0 ;
+        --source-group ${CLIENT_SG_ID} ;
 ```
-### (5)-(b) StorageGateway用S3バケット作成
+### (4)-(b) StorageGateway用S3バケット作成
 ```shell
 BUCKET_NAME="storagegw-bucket-$( od -vAn -to1 </dev/urandom  | tr -d " " | fold -w 10 | head -n 1)"
 REGION=$(aws --profile ${PROFILE} configure get region)
@@ -502,7 +516,7 @@ aws --profile ${PROFILE} \
         --bucket ${BUCKET_NAME} \
         --create-bucket-configuration LocationConstraint=${REGION};
 ```
-### (5)-(c) StorageGateway用IAMRole作成
+### (4)-(c) StorageGateway用IAMRole作成
 ```shell
 POLICY='{
   "Version": "2012-10-17",
@@ -570,6 +584,20 @@ aws --profile ${PROFILE} \
         --policy-name "AccessS3buckets" \
         --policy-document "${POLICY}";
 ```
+
+### (4)-(d) NTP接続不可回避用のRoute53 Private Hosted Zone設定
+ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
+)である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
+```shell
+#Private Hosted zoneの作成
+aws --profile ${PROFILE} \
+    route53 create-hosted-zone \
+        --name "amazon.pool.ntp.org" \
+        --vpc ${VPCID} \
+
+
+
+
 
 ## (６) Provided-DNS環境でのテスト
 正常動作確認のため、Provided-DNSを利用した環境で正常にゲートウェイをアクティベーションして利用可能であることを確認します。
