@@ -410,7 +410,7 @@ aws --profile ${PROFILE} \
         --instance-type t2.micro \
         --key-name ${KEYNAME} \
         --subnet-id ${PublicSubnet2Id} \
-        --security-group-ids ${SSH_SG_ID}\
+        --security-group-ids ${MGR_SSH_SG_ID}\
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" \
         --user-data "${USER_DATA}" ;
@@ -671,11 +671,11 @@ aws --profile ${PROFILE} \
 
 
 
-## (６) Provided-DNS環境でのテスト
-正常動作確認のため、Provided-DNSを利用した環境で正常にゲートウェイをアクティベーションして利用可能であることを確認します。
+## (5) ファイルゲートウェイの作成
+ゲートウェイを作成、アクティベーションして利用可能な状態にします。
 <center><img src="./Documents/Step6.png" whdth=500></center>
 
-### (6)-(a) ファイルゲートウェイ・インスタンスの作成
+### (５)-(a) ファイルゲートウェイ・インスタンスの作成
 ```shell
 # FileGatewayの最新のAMIIDを取得する
 FGW_AMIID=$(aws --profile ${PROFILE} --output text \
@@ -734,13 +734,13 @@ aws --profile ${PROFILE} \
         --image-id ${FGW_AMIID} \
         --instance-type ${INSTANCE_TYPE} \
         --key-name ${KEYNAME} \
-        --subnet-id ${SGW_SUBNET1} \
+        --subnet-id ${PrivateSubnet1Id} \
         --security-group-ids ${SGW_SG_ID} \
         --block-device-mappings "${BLOCK_DEVICE_MAPPINGS}" \
         --tag-specifications "${TAGJSON}" \
         --monitoring Enabled=true;
 ```
-### (6)-(b) アクティベーションキーの取得
+### (5)-(b) アクティベーションキーの取得
 ファイルゲートウェイから、 アクティベーションキーを取得します。
 (i)アクティベーション用のURL作成
 ```shell
@@ -766,8 +766,8 @@ echo ${ACTIVATION_URL}
 https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/gateway-private-link.html#GettingStartedActivateGateway-file-vpc
 
 (ii)アクティベーションキーの取得<br>
-DNSサーバ上から、生成したURLでアクティベーションキーを取得します。(WindowsClientのIEでは上手くアクティベーションできなかったため。理由不明)
-### (6)-(c) ゲートウェイのアクティベーション
+LinuxManager上から、生成したURLでアクティベーションキーを取得します。
+### (5)-(c) ゲートウェイのアクティベーション
 ファイルゲートウェイをアクティベーションします。
 ```shell
 ACTIVATION_KEY=<取得したアクティベーションキーを入力>
@@ -792,7 +792,7 @@ aws --profile ${PROFILE} storagegateway describe-gateway-information --gateway-a
 - "VTL"    : VirtualTapeLibrary
 - "FILE_S3": File Gateway
 
-### (6)-(d) ローカルディスク設定
+### (5)-(d) ローカルディスク設定
 ```shell
 #ローカルストレージの確認
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
@@ -813,7 +813,7 @@ aws --profile ${PROFILE} --output text \
 ```
 参照：https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/create-gateway-file.html
 
-### (6)-(e) SMB設定(SMBSecurityStrategy)
+### (5)-(e) SMB設定(SMBSecurityStrategy)
 ```shell
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
 
@@ -822,7 +822,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --smb-security-strategy MandatoryEncryption
 ```
-### (6)-(f) ゲストアクセス用の SMB ファイル共有を設定
+### (5)-(f) ゲストアクセス用の SMB ファイル共有を設定
 ```shell
 PASSWORD="HogeHoge@"
 aws --profile ${PROFILE} storagegateway \
@@ -830,7 +830,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --password ${PASSWORD}
 ```
-### (6)-(g) SMBファイル共有
+### (5)-(g) SMBファイル共有
 ```shell
 #情報取得
 BUCKETARN="arn:aws:s3:::${BUCKET_NAME}" #${BUCKET_NAME}は、バケット作成時に設定した変数
@@ -854,343 +854,4 @@ aws --profile ${PROFILE} storagegateway \
         --default-storage-class S3_STANDARD \
         --guess-mime-type-enabled \
         --authentication GuestAccess
-```
-### (7)ファイルゲートウェイクリーニング
-```shell
-#共有ファイル削除
-#aws --profile ${PROFILE} storagegateway list-file-shares で確認し設定
-FILE_SHARE_ID="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-4B43E429"
-aws --profile ${PROFILE} storagegateway \
-    delete-file-share \
-        --file-share-arn ${FILE_SHARE_ID};
-
-#ゲートウェイ削除
-GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
-
-aws --profile ${PROFILE} storagegateway \
-    delete-gateway \
-        --gateway-arn ${GATEWAY_ARN};
-
-#EC2インスタンス削除
-#構成情報取得
-GATEWAY_INSTANCE_ID=$(aws --profile ${PROFILE} --output text \
-    ec2 describe-instances  \
-        --filters "Name=tag:Name,Values=Fgw" "Name=instance-state-name,Values=running" \
-    --query 'Reservations[*].Instances[*].InstanceId' )
-
-aws --profile ${PROFILE} ec2 \
-    terminate-instances \
-        --instance-ids ${GATEWAY_INSTANCE_ID};
-```
-### (8) 個別DNS環境でのテスト - 事前準備(DHCP変更)
-テスト実施で、Internetへ参照する個別DNSサーバを利用した環境で稼働するゲートウェイをアクティベーションして利用可能か確認します。
-<center><img src="./Documents/Step8.png" whdth=500></center>
-
-### (8)-(a) VPCのDHCPオプションセットの変更
-StorageGateway側のVPCのDHCPオプションを変更し、起動したEC2インスタンスがDNSサーバへ参照するようにします。
-```shell
-#DNSサーバのローカルIP取得
-DnsLocalIP=$(aws --profile ${PROFILE} --output text \
-    ec2 describe-instances \
-        --filter "Name=tag:Name,Values=Dns" "Name=instance-state-name,Values=running"  \
-    --query 'Reservations[].Instances[].PrivateIpAddress' \
-)
-echo ${DnsLocalIP}
-
-#SGW VPC: DHCPオプションセット関連付け
-aws --profile ${PROFILE} \
-    ec2 associate-dhcp-options \
-      --vpc-id ${VPCID} \
-      --dhcp-options-id ${ONPRE_DHCPSET_ID} ;
-      
-#SGW VPC: DHCPオプションセット作成
-SGW_DHCPSET_ID=$(aws --profile ${PROFILE} --output text \
-    ec2 create-dhcp-options \
-        --dhcp-configurations \
-            "Key=domain-name,Values=sgw.internal" \
-            "Key=domain-name-servers,Values=${DnsLocalIP}" \
-            "Key=ntp-servers,Values=169.254.169.123" \
-    --query 'DhcpOptions.DhcpOptionsId'; )
-
-#SGW VPC: DHCPオプションセット関連付け
-aws --profile ${PROFILE} \
-    ec2 associate-dhcp-options \
-      --vpc-id ${VPCID} \
-      --dhcp-options-id ${SGW_DHCPSET_ID} ;
-```
-
-### (8)-(b) ファイルゲートウェイ・インスタンスの作成
-```shell
-KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。
-# FileGatewayの最新のAMIIDを取得する
-FGW_AMIID=$(aws --profile ${PROFILE} --output text \
-    ec2 describe-images \
-        --owners amazon \
-        --filters 'Name=name,Values=aws-storage-gateway-??????????' \
-                  'Name=state,Values=available' \
-        --query 'reverse(sort_by(Images, &CreationDate))[:1].ImageId' );
-
-#Security Group ID取得
-SGW_SG_ID=$(aws --profile ${PROFILE} --output text \
-        ec2 describe-security-groups \
-                --filter 'Name=group-name,Values=SGWSG' \
-        --query 'SecurityGroups[].GroupId');
-
-
-#ファイルゲートウェイインスタンスの起動
-INSTANCE_TYPE=c4.4xlarge
-TAGJSON='
-[
-    {
-        "ResourceType": "instance",
-        "Tags": [
-            {
-                "Key": "Name",
-                "Value": "Fgw"
-            }
-        ]
-    }
-]'
-BLOCK_DEVICE_MAPPINGS='[
-    {
-        "DeviceName": "/dev/xvda",
-        "Ebs": {
-            "DeleteOnTermination": true,
-            "VolumeType": "io1",
-            "Iops": 4000,
-            "VolumeSize": 350,
-            "Encrypted": false
-        }
-    },
-    {
-        "DeviceName": "/dev/sdm",
-        "Ebs": {
-            "DeleteOnTermination": true,
-            "VolumeType": "io1",
-            "Iops": 1500,
-            "VolumeSize": 1024,
-            "Encrypted": false
-        }
-    }
-]'
-
-aws --profile ${PROFILE} \
-    ec2 run-instances \
-        --image-id ${FGW_AMIID} \
-        --instance-type ${INSTANCE_TYPE} \
-        --key-name ${KEYNAME} \
-        --subnet-id ${SGW_SUBNET1} \
-        --security-group-ids ${SGW_SG_ID} \
-        --block-device-mappings "${BLOCK_DEVICE_MAPPINGS}" \
-        --tag-specifications "${TAGJSON}" \
-        --monitoring Enabled=true;
-```
-### (8)-(c) アクティベーションキーの取得
-ファイルゲートウェイから、 アクティベーションキーを取得します。
-(i)アクティベーション用のURL作成
-```shell
-#構成情報取得
-GatewayIP=$(aws --profile ${PROFILE} --output text \
-    ec2 describe-instances  \
-        --filters "Name=tag:Name,Values=Fgw" "Name=instance-state-name,Values=running" \
-    --query 'Reservations[*].Instances[*].PrivateIpAddress' )
-REGION=$(aws --profile ${PROFILE} configure get region)
-VPCEndpointDNSname=$(aws --profile ${PROFILE} --output text \
-    ec2 describe-vpc-endpoints \
-        --filters \
-            "Name=service-name,Values=com.amazonaws.ap-northeast-1.storagegateway" \
-            "Name=vpc-id,Values=${VPCID}" \
-    --query 'VpcEndpoints[*].DnsEntries[0].DnsName' );
-echo ${GatewayIP} ${REGION} ${VPCEndpointDNSname}
-
-#アクティベーション先のURL生成
-ACTIVATION_URL="http://${GatewayIP}/?gatewayType=FILE_S3&activationRegion=${REGION}&vpcEndpoint=${VPCEndpointDNSname}&no_redirect"
-echo ${ACTIVATION_URL}
-```
-参考
-https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/gateway-private-link.html#GettingStartedActivateGateway-file-vpc
-
-(ii)アクティベーションキーの取得<br>
-DNSサーバ上から、生成したURLでアクティベーションキーを取得します。(WindowsClientのIEでは上手くアクティベーションできなかったため。理由不明)
-### (8)-(d) ゲートウェイのアクティベーション
-ファイルゲートウェイをアクティベーションします。
-```shell
-ACTIVATION_KEY=<取得したアクティベーションキーを入力>
-REGION=$(aws --profile ${PROFILE} configure get region)
-aws --profile ${PROFILE} \
-    storagegateway activate-gateway \
-        --activation-key ${ACTIVATION_KEY} \
-        --gateway-name SgPoC-Gateway-1 \
-        --gateway-timezone "GMT+9:00" \
-        --gateway-region ${REGION} \
-        --gateway-type FILE_S3
-
-#作成したGatewayのARN取得
-# atewayState"が "RUNNING"になるまで待つ
-#ARNがわからない場合は、下記コマンドで確認
-#aws --profile ${PROFILE} storagegateway list-gateways
-aws --profile ${PROFILE} storagegateway describe-gateway-information --gateway-arn <GATEWAYのARN>
-```
-＜参考 gateway-typeの説明>
-- "STORED" : VolumeGateway(Store type)
-- "CACHED" : VolumeGateway(Cache tyep)
-- "VTL"    : VirtualTapeLibrary
-- "FILE_S3": File Gateway
-
-### (8)-(e) ローカルディスク設定
-```shell
-#ローカルストレージの確認
-GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
-DiskIds=$(aws --profile ${PROFILE} --output text storagegateway list-local-disks --gateway-arn ${GATEWAY_ARN} --query 'Disks[*].DiskId'| sed -e 's/\n/ /')
-echo ${DiskIds}
-
-#ローカルストレージの割り当て
-aws --profile ${PROFILE} storagegateway \
-    add-cache \
-        --gateway-arn ${GATEWAY_ARN} \
-        --disk-ids ${DiskIds}
-
-#ローカルストレージの確認
-# "DiskAllocationType"が"CACHE STORAGE"で、"DiskStatus"が"present"であることを確認
-aws --profile ${PROFILE} --output text \
-    storagegateway list-local-disks \
-        --gateway-arn ${GATEWAY_ARN}
-```
-参照：https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/create-gateway-file.html
-
-### (8)-(f) SMB設定(SMBSecurityStrategy)
-```shell
-GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
-
-aws --profile ${PROFILE} storagegateway \
-    update-smb-security-strategy \
-        --gateway-arn ${GATEWAY_ARN} \
-        --smb-security-strategy MandatoryEncryption
-```
-### (8)-(g) ゲストアクセス用の SMB ファイル共有を設定
-```shell
-PASSWORD="HogeHoge@"
-aws --profile ${PROFILE} storagegateway \
-    set-smb-guest-password \
-        --gateway-arn ${GATEWAY_ARN} \
-        --password ${PASSWORD}
-```
-### (8)-(h) SMBファイル共有
-```shell
-#情報取得
-BUCKETARN="arn:aws:s3:::${BUCKET_NAME}" #${BUCKET_NAME}は、バケット作成時に設定した変数
-ROLE="StorageGateway-S3AccessRole"
-ROLEARN=$(aws --profile  ${PROFILE} --output text \
-    iam get-role \
-        --role-name "StorageGateway-S3AccessRole" \
-    --query 'Role.Arn')
-GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
-CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
-echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
-
-#実行
-aws --profile ${PROFILE} storagegateway \
-    create-smb-file-share \
-        --client-token ${CLIENT_TOKEN} \
-        --gateway-arn "${GATEWAY_ARN}" \
-        --location-arn "${BUCKETARN}" \
-        --role "${ROLEARN}" \
-        --object-acl bucket-owner-full-control \
-        --default-storage-class S3_STANDARD \
-        --guess-mime-type-enabled \
-        --authentication GuestAccess
-```
-### (9) Windows Clinetからの接続確認
-(i)マネージメントコンソールの「Storage Gateway」→「ファイル共有」でファイル共有を選び、コマンドをコピーする  
-(ii)マネージメントコンソールWindowsにRDPログインし、コマンドラインから上記でコピーしたコマンドを実行する(パスワードは、HogeHoge@)  
-
-### (10) Storage Gatewayインスタンスの設定確認
-DNSサーバを踏み台として、StorageGatewayにSSHログインし、DNS設定と接続状況を確認する。<br>
-### (10)-(a) ゲートウェイへのsshログイン
-DNSサーバを踏み台として、ゲートウェイにsshログインする
-```shell
-ssh admin@<ゲートウェイのIPアドレス>
-```
-### (10)-(b) DNS参照先の確認
-DNS参照先サーバとして、作成したDNSサーバのローカルIPが登録されていることを確認します。
-```
-	AWS Storage Gateway - Configuration
-
-	#######################################################################
-	##  Currently connected network adapters:
-	##
-	##  eth0: 10.1.64.102	
-	#######################################################################
-
-	1: Configure HTTP Proxy
-	2: Network Configuration
-	3: Test Network Connectivity
-	4: View System Resource Check (0 Errors)
-	5: Command Prompt
-
-	Press "x" to exit session
-
-        Enter command: 2
-```
-Network ConfigurationでDNS設定を確認します。
-```
-	AWS Storage Gateway - Network Configuration
-
-	1: Edit DNS Configuration
-	2: View DNS Configuration
-
-	Press "x" to exit
-
-	Enter command: 2
-
-	DNS Configuration
-
-
-	Available adapters: eth0
-	Enter network adapter: eth0
-
-	Source: Assigned by DHCP
-	DNS: 10.2.64.19  <<=作成したDNSサーバのIPであることを確認
-
-
-	Press any key to continue
-```
-### (10)-(c) ネットワークの疎通確認
-ネットワークの疎通で、VPC EndpointそのもののDNS(アクティベーションキー取得時に指定したDNS)で接続していることを確認します。
-```
-	AWS Storage Gateway - Configuration
-
-	#######################################################################
-	##  Currently connected network adapters:
-	##
-	##  eth0: 10.1.64.102	
-	#######################################################################
-
-	1: Configure HTTP Proxy
-	2: Network Configuration
-	3: Test Network Connectivity
-	4: View System Resource Check (0 Errors)
-	5: Command Prompt
-
-	Press "x" to exit session
-
-        Enter command: 3 
-```
-"Network Configuration"に遷移した後の画面です。ここで、VPC Endpointでの疎通が取れていることを確認します。
-```
-	Testing network connection
-	
-	client-cp.storagegateway.ap-northeast-1.amazonaws.com
-	via vpce-059b6f61fc8765ae8-bypjfko4.storagegateway.ap-northeast-1.vpce.amazonaws.com:1026
-	  [ PASSED ]
-	
-	proxy-app.storagegateway.ap-northeast-1.amazonaws.com
-	via vpce-059b6f61fc8765ae8-bypjfko4.storagegateway.ap-northeast-1.vpce.amazonaws.com:1028
-	  [ PASSED ]
-	
-	dp-1.storagegateway.ap-northeast-1.amazonaws.com
-	via vpce-059b6f61fc8765ae8-bypjfko4.storagegateway.ap-northeast-1.vpce.amazonaws.com:1031
-	  [ PASSED ]
-	
-	Press Return to Continue
 ```
