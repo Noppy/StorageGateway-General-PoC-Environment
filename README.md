@@ -589,13 +589,85 @@ aws --profile ${PROFILE} \
 ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
 )である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
 ```shell
+#設定
+REGION=$(aws --profile ${PROFILE} configure get region)
+
 #Private Hosted zoneの作成
 aws --profile ${PROFILE} \
     route53 create-hosted-zone \
         --name "amazon.pool.ntp.org" \
-        --vpc ${VPCID} \
+        --caller-reference $(date '+%Y-%m-%d-%H:%M') \
+        --vpc VPCRegion=${REGION},VPCId=${VPCID} ;
 
+HOSTED_ZONE_ID=$(aws --profile ${PROFILE} --output text \
+    route53 list-hosted-zones-by-name \
+        --dns-name "amazon.pool.ntp.org" \
+    --query 'HostedZones[].Id' | sed -e 's/\/hostedzone\///') ;
 
+#レコード登録
+CHANGE_BATCH_JSON='{
+  "Comment": "CREATE NTP records ",
+  "Changes": [
+    {
+      "Action": "CREATE",
+      "ResourceRecordSet": {
+        "Name": "0.amazon.pool.ntp.org",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "169.254.169.123"
+          }
+        ]
+      }
+    },
+    {
+      "Action": "CREATE",
+      "ResourceRecordSet": {
+        "Name": "1.amazon.pool.ntp.org",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "169.254.169.123"
+          }
+        ]
+      }
+    },
+    {
+      "Action": "CREATE",
+      "ResourceRecordSet": {
+        "Name": "2.amazon.pool.ntp.org",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "169.254.169.123"
+          }
+        ]
+      }
+    },
+    {
+      "Action": "CREATE",
+      "ResourceRecordSet": {
+        "Name": "3.amazon.pool.ntp.org",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "169.254.169.123"
+          }
+        ]
+      }
+    }
+  ]
+}'
+#x.amazon.poo..ntp.orgのAレコード登録
+aws --profile ${PROFILE} \
+    route53 change-resource-record-sets \
+            --hosted-zone-id ${HOSTED_ZONE_ID} \
+            --change-batch "${CHANGE_BATCH_JSON}";
+```
 
 
 
