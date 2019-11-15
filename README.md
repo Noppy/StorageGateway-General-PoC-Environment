@@ -18,6 +18,7 @@
 export PROFILE=<設定したプロファイル名称を指定。デフォルトの場合はdefaultを設定>
 export REGION=ap-northeast-1
 ```
+
 ## (2)VPCの作成(CloudFormation利用)
 IGWでインターネットアクセス可能で、パブリックアクセス可能なサブネットx2、プライベートなサブネットx2の合計4つのサブネットを所有するVPCを作成します。
 <center><img src="./Documents/Step2.png" whdth=500></center>
@@ -251,6 +252,16 @@ aws --profile ${PROFILE} \
     iam attach-role-policy \
         --role-name "Ec2-StorageGW-AdminRole" \
         --policy-arn arn:aws:iam::aws:policy/AWSStorageGatewayFullAccess
+
+#インスタンスプロファイルの作成
+aws --profile ${PROFILE} \
+    iam create-instance-profile \
+        --instance-profile-name "Ec2-StorageGW-AdminRole-Profile";
+
+aws --profile ${PROFILE} \
+    iam add-role-to-instance-profile \
+        --instance-profile-name "Ec2-StorageGW-AdminRole-Profile" \
+        --role-name "Ec2-StorageGW-AdminRole" ;
 ```
 ## (4) Windows/Linuxクライアント、Linux-Manager作成
 <center><img src="./Documents/Step4.png" whdth=500></center>
@@ -384,7 +395,11 @@ echo -e "KEYNAME=${KEYNAME}\nAL2_AMIID=${AL2_AMIID}\nWIN2019_AMIID=${WIN2019_AMI
 ```
 ### (4)-(c) Liunux-Client作成
 ```shell
-INSTANCE_TYPE=t2.xlarge
+#インスタンスタイプ設定
+#INSTANCE_TYPE="t2.micro"
+INSTANCE_TYPE="m5d.8xlarge"
+
+#タグ設定
 TAGJSON='
 [
     {
@@ -398,6 +413,7 @@ TAGJSON='
     }
 ]'
 
+#ユーザデータ設定
 USER_DATA='
 #!/bin/bash -xe
                 
@@ -419,7 +435,11 @@ aws --profile ${PROFILE} \
 ```
 ### (4)-(d) Windows-Client作成
 ```shell
-INSTANCE_TYPE=t2.xlarge
+#インスタンスタイプ設定
+#INSTANCE_TYPE="t2.micro"
+INSTANCE_TYPE="m5d.8xlarge"
+
+#タグ設定
 TAGJSON='
 [
     {
@@ -446,6 +466,10 @@ aws --profile ${PROFILE} \
 ```
 ### (4)-(e) Manager(Linux)の作成
 ```shell
+#インスタンスタイプ設定
+INSTANCE_TYPE="t2.micro"
+
+#タグ設定
 TAGJSON='
 [
     {
@@ -458,7 +482,7 @@ TAGJSON='
         ]
     }
 ]'
-
+#ユーザデータ設定
 USER_DATA='
 #!/bin/bash -xe
                 
@@ -476,7 +500,8 @@ aws --profile ${PROFILE} \
         --security-group-ids ${MGR_SSH_SG_ID}\
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" \
-        --user-data "${USER_DATA}" ;
+        --user-data "${USER_DATA}" \
+        --iam-instance-profile "Name=Ec2-StorageGW-AdminRole-Profile";
 ```
 ## (5) StorageGateway作成(事前準備)
 Storage Gatewayで利用するS3のバケットと、S3アクセス用にStorage Gatewayが利用するIAMロールを作成します。
