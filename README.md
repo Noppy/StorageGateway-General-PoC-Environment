@@ -224,7 +224,7 @@ aws --profile ${PROFILE} \
         --subnet-id ${PrivateSubnet1Id} ${PrivateSubnet2Id} \
         --security-group-id ${VPCENDPOINT_SG_ID} ;
 ```
-## (4) Storage Gateway管理用のIAMロール(管理サーバ用)作成
+## (3) Storage Gateway管理用のIAMロール(管理サーバ用)作成
 ```shell
 POLICY='{
   "Version": "2012-10-17",
@@ -252,11 +252,10 @@ aws --profile ${PROFILE} \
         --role-name "Ec2-StorageGW-AdminRole" \
         --policy-arn arn:aws:iam::aws:policy/AWSStorageGatewayFullAccess
 ```
-
-## (3) Windows/Linuxクライアント、Linux-Manager作成
+## (4) Windows/Linuxクライアント、Linux-Manager作成
 <center><img src="./Documents/Step4.png" whdth=500></center>
 
-### (3)-(a) セキュリティーグループ作成(Bastion)
+### (4)-(a) セキュリティーグループ作成(Bastion)
 (i) Client - SSHログイン用 Security Group
 ```shell
 # SSHログイン用セキュリティーグループ作成
@@ -363,7 +362,7 @@ MGR_SG_ID=$(aws --profile ${PROFILE} --output text \
 echo -e "SSH_SG_ID   =${SSH_SG_ID}\nRDP_SG_ID   =${RDP_SG_ID}\nCLIENT_SG_ID=${CLIENT_SG_ID}\nMGR_SG_ID   =${MGR_SG_ID}"
 
 ```
-### (3)-(b)インスタンス作成用の事前情報取得
+### (4)-(b)インスタンス作成用の事前情報取得
 ```shell
 KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。  
 
@@ -383,7 +382,7 @@ WIN2019_AMIID=$(aws --profile ${PROFILE} --output text \
         --query 'reverse(sort_by(Images, &CreationDate))[:1].ImageId' ) ;
 echo -e "KEYNAME=${KEYNAME}\nAL2_AMIID=${AL2_AMIID}\nWIN2019_AMIID=${WIN2019_AMIID}"
 ```
-### (3)-(c) Liunux-Client作成
+### (4)-(c) Liunux-Client作成
 ```shell
 INSTANCE_TYPE=t2.xlarge
 TAGJSON='
@@ -418,7 +417,7 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" \
         --user-data "${USER_DATA}" ;
 ```
-### (3)-(d) Windows-Client作成
+### (4)-(d) Windows-Client作成
 ```shell
 INSTANCE_TYPE=t2.xlarge
 TAGJSON='
@@ -445,7 +444,7 @@ aws --profile ${PROFILE} \
         --associate-public-ip-address \
         --tag-specifications "${TAGJSON}" ;
 ```
-### (3)-(e) Manager(Linux)の作成
+### (4)-(e) Manager(Linux)の作成
 ```shell
 TAGJSON='
 [
@@ -479,11 +478,11 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" \
         --user-data "${USER_DATA}" ;
 ```
-## (4) StorageGateway作成(事前準備)
+## (5) StorageGateway作成(事前準備)
 Storage Gatewayで利用するS3のバケットと、S3アクセス用にStorage Gatewayが利用するIAMロールを作成します。
 <center><img src="./Documents/Step5.png" whdth=500></center>
 
-### (4)-(a) StorageGateway用のSecurityGroup作成
+### (5)-(a) StorageGateway用のSecurityGroup作成
 (i) SGW用 Security Group
 ```shell
 # セキュリティーグループID取得
@@ -570,7 +569,7 @@ aws --profile ${PROFILE} \
         --port 20048 \
         --source-group ${CLIENT_SG_ID} ;
 ```
-### (4)-(b) StorageGateway用S3バケット作成
+### (5)-(b) StorageGateway用S3バケット作成
 ```shell
 BUCKET_NAME="storagegw-bucket-$( od -vAn -to1 </dev/urandom  | tr -d " " | fold -w 10 | head -n 1)"
 REGION=$(aws --profile ${PROFILE} configure get region)
@@ -580,7 +579,7 @@ aws --profile ${PROFILE} \
         --bucket ${BUCKET_NAME} \
         --create-bucket-configuration LocationConstraint=${REGION};
 ```
-### (4)-(c) StorageGateway用IAMRole作成
+### (5)-(c) StorageGateway用IAMRole作成
 ```shell
 POLICY='{
   "Version": "2012-10-17",
@@ -649,7 +648,7 @@ aws --profile ${PROFILE} \
         --policy-document "${POLICY}";
 ```
 
-### (4)-(d) NTP接続不可回避用のRoute53 Private Hosted Zone設定
+### (5)-(d) NTP接続不可回避用のRoute53 Private Hosted Zone設定
 ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
 )である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
 ```shell
@@ -733,11 +732,11 @@ aws --profile ${PROFILE} \
             --change-batch "${CHANGE_BATCH_JSON}";
 ```
 
-## (5) ファイルゲートウェイの作成
+## (6) ファイルゲートウェイの作成
 ゲートウェイを作成、アクティベーションして利用可能な状態にします。
 <center><img src="./Documents/Step6.png" whdth=500></center>
 
-### (５)-(a) ファイルゲートウェイ・インスタンスの作成
+### (6)-(a) ファイルゲートウェイ・インスタンスの作成
 ```shell
 # FileGatewayの最新のAMIIDを取得する
 FGW_AMIID=$(aws --profile ${PROFILE} --output text \
@@ -802,7 +801,7 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" \
         --monitoring Enabled=true;
 ```
-### (5)-(b) アクティベーションキーの取得
+### (6)-(b) アクティベーションキーの取得
 ファイルゲートウェイから、 アクティベーションキーを取得します。
 (i)アクティベーション用のURL作成
 ```shell
@@ -829,7 +828,7 @@ https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/gateway-privat
 
 (ii)アクティベーションキーの取得<br>
 LinuxManager上から、生成したURLでアクティベーションキーを取得します。
-### (5)-(c) ゲートウェイのアクティベーション
+### (6)-(c) ゲートウェイのアクティベーション
 ファイルゲートウェイをアクティベーションします。
 ```shell
 ACTIVATION_KEY=<取得したアクティベーションキーを入力>
@@ -854,7 +853,7 @@ aws --profile ${PROFILE} storagegateway describe-gateway-information --gateway-a
 - "VTL"    : VirtualTapeLibrary
 - "FILE_S3": File Gateway
 
-### (5)-(d) ローカルディスク設定
+### (6)-(d) ローカルディスク設定
 ```shell
 #ローカルストレージの確認
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
@@ -875,7 +874,7 @@ aws --profile ${PROFILE} --output text \
 ```
 参照：https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/create-gateway-file.html
 
-### (5)-(e) SMB設定(SMBSecurityStrategy)
+### (6)-(e) SMB設定(SMBSecurityStrategy)
 ```shell
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
 
@@ -884,7 +883,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --smb-security-strategy MandatoryEncryption
 ```
-### (5)-(f) ゲストアクセス用の SMB ファイル共有を設定
+### (6)-(f) ゲストアクセス用の SMB ファイル共有を設定
 ```shell
 PASSWORD="HogeHoge@"
 aws --profile ${PROFILE} storagegateway \
@@ -892,7 +891,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --password ${PASSWORD}
 ```
-### (5)-(g) SMBファイル共有
+### (6)-(g) SMBファイル共有
 ```shell
 #情報取得
 BUCKETARN="arn:aws:s3:::${BUCKET_NAME}" #${BUCKET_NAME}は、バケット作成時に設定した変数
