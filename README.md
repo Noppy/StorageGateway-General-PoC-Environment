@@ -935,7 +935,7 @@ aws --profile ${PROFILE} \
         --block-device-mappings "${BLOCK_DEVICE_MAPPINGS}" \
         --tag-specifications "${TAGJSON}" \
         --monitoring Enabled=true \
-        --iam-instance-profile "StorageGateway-GatewayInstanceRole-profile"
+        --iam-instance-profile "Name=StorageGateway-GatewayInstanceRole-profile"
 
 ```
 ### (6)-(b) Mgr-Linuxへのログインとセットアップ
@@ -1018,8 +1018,6 @@ PrivateSubnet2RouteTableId=$(aws --profile ${PROFILE} --output text \
 
 echo -e "VPCID=$VPCID\nVPC_CIDR=$VPC_CIDR\nPublicSubnet1Id =$PublicSubnet1Id\nPublicSubnet2Id =$PublicSubnet2Id\nPrivateSubnet1Id=$PrivateSubnet1Id\nPrivateSubnet2Id=$PrivateSubnet2Id\nPrivateSubnet1RouteTableId=$PrivateSubnet1RouteTableId \nPrivateSubnet2RouteTableId=$PrivateSubnet2RouteTableId"
 ```
-
-
 
 ### (6)-(b) アクティベーションキーの取得
 ファイルゲートウェイから、 アクティベーションキーを取得します。<br>
