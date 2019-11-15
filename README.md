@@ -247,11 +247,19 @@ aws --profile ${PROFILE} \
         --assume-role-policy-document "${POLICY}" \
         --max-session-duration 43200
 
-#AWS管理ポリシー(AWSStorageGatewayFullAccess)のアタッチ
+#AWS管理ポリシーのアタッチ
+# AWSStorageGatewayFullAccessのアタッチ
 aws --profile ${PROFILE} \
     iam attach-role-policy \
         --role-name "Ec2-StorageGW-AdminRole" \
         --policy-arn arn:aws:iam::aws:policy/AWSStorageGatewayFullAccess
+
+# ReadOnlyAccessのアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "Ec2-StorageGW-AdminRole" \
+        --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
+        
 
 #インスタンスプロファイルの作成
 aws --profile ${PROFILE} \
@@ -827,7 +835,7 @@ aws --profile ${PROFILE} \
         --monitoring Enabled=true;
 ```
 ### (6)-(b) アクティベーションキーの取得
-ファイルゲートウェイから、 アクティベーションキーを取得します。
+ファイルゲートウェイから、 アクティベーションキーを取得します。<br>
 (i)アクティベーション用のURL作成
 ```shell
 #構成情報取得
