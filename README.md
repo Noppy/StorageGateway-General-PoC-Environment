@@ -869,6 +869,53 @@ aws sts get-caller-identity
 #利用するプロファイル設定
 export PROFILE=default
 ```
+#### (iii) 構成情報の取得
+```shell
+#構成情報取得
+VPCID=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`VpcId`].[OutputValue]')
+
+VPC_CIDR=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`VpcCidr`].[OutputValue]')
+
+PublicSubnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet1Id`].[OutputValue]')
+
+PublicSubnet2Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet2Id`].[OutputValue]')
+
+PrivateSubnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet1Id`].[OutputValue]')
+
+PrivateSubnet2Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet2Id`].[OutputValue]')
+
+PrivateSubnet1RouteTableId=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet1RouteTableId`].[OutputValue]')
+
+PrivateSubnet2RouteTableId=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet2RouteTableId`].[OutputValue]')
+
+echo -e "VPCID=$VPCID\nVPC_CIDR=$VPC_CIDR\nPublicSubnet1Id =$PublicSubnet1Id\nPublicSubnet2Id =$PublicSubnet2Id\nPrivateSubnet1Id=$PrivateSubnet1Id\nPrivateSubnet2Id=$PrivateSubnet2Id\nPrivateSubnet1RouteTableId=$PrivateSubnet1RouteTableId \nPrivateSubnet2RouteTableId=$PrivateSubnet2RouteTableId"
+```
+
+
 
 ### (6)-(b) アクティベーションキーの取得
 ファイルゲートウェイから、 アクティベーションキーを取得します。<br>
