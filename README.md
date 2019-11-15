@@ -263,6 +263,12 @@ aws --profile ${PROFILE} \
         --role-name "Ec2-StorageGW-AdminRole" \
         --policy-arn arn:aws:iam::aws:policy/AWSStorageGatewayFullAccess
 
+# CloudWatch管理者権限のアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "Ec2-StorageGW-AdminRole" \
+        --policy-arn arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+
 # ReadOnlyAccessのアタッチ
 aws --profile ${PROFILE} \
     iam attach-role-policy \
@@ -1090,7 +1096,35 @@ aws --profile ${PROFILE} --output text \
 ```
 参照：https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/create-gateway-file.html
 
-### (6)-(e) SMB設定(SMBSecurityStrategy)
+### (6)-(e) CloudWatch Logs設定
+ファイルゲートウェイインスタンスから、Logsへのログ出力設定を行います。LogsにはS3へのDenyAccess情報などが記録されます。
+```shell
+#情報取得
+GATEWAY_ARN=$(aws --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ match($0, /arn:aws:storagegateway:\S*/); print substr($0, RSTART, RLENGTH) }')
+#Region=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/.$//')
+#AccuntId=$(curl -s http://169.254.169.254/latest/meta-data/identity-credentials/ec2/info|awk '/AccountId/{ i=gsub( /"/, "", $3); print $3}')
+echo "GATEWAY_ARN=$GATEWAY_ARN  Region=${Region} AccuntId=${AccuntId}"
+
+#CloudWatch Logsログストリーム作成
+LOG_GROUP_NAME=${SgPoC-Gateway-1}
+aws --profile ${PROFILE} \
+    logs create-log-group \
+        --log-group-name ${LOG_GROUP_NAME};
+
+LOG_GROUP_ARN=$(aws --profile ${PROFILE} --output text \
+    logs describe-log-groups \
+        --log-group-name-prefix ${LOG_GROUP_NAME} \
+    --query 'logGroups[].arn' );
+
+#ファイルゲートウェイへの出力先ロググループ設定
+aws --profile ${PROFILE} \
+    storagegateway update-gateway-information \
+        --gateway-arn ${GATEWAY_ARN} \
+        --cloud-watch-log-group-arn ${LOG_GROUP_ARN}
+```
+
+## (7) File Gateway - ファイル共有設定
+### (7)-(a) SMB設定(SMBSecurityStrategy)
 ```shell
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
 
@@ -1099,7 +1133,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --smb-security-strategy MandatoryEncryption
 ```
-### (6)-(f) ゲストアクセス用の SMB ファイル共有を設定
+### (7)-(b) ゲストアクセス用の SMB ファイル共有を設定
 ```shell
 PASSWORD="HogeHoge@"
 aws --profile ${PROFILE} storagegateway \
@@ -1107,7 +1141,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --password ${PASSWORD}
 ```
-### (6)-(g) SMBファイル共有
+### (7)-(c) SMBファイル共有
 ```shell
 #情報取得
 BUCKET_NAME=<バケット名を個別に設定>
