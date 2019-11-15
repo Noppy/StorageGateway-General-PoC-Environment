@@ -64,7 +64,7 @@ aws --profile ${PROFILE} cloudformation create-stack \
     --parameters "${CFN_STACK_PARAMETERS}" \
     --capabilities CAPABILITY_IAM ;
 ```
-## (2) Peering & VPCEndpoint設定
+## (2) VPCEndpoint設定
 必要となるVPC Endpointを作成します。
 <center><img src="./Documents/Step3.png" whdth=500></center>
 
@@ -146,11 +146,20 @@ aws --profile ${PROFILE} \
         --resources ${VPCENDPOINT_STORAGEGW_SG_ID} \
         --tags "Key=Name,Value=SGW-VpcEndpointSG" ;
 
+# AWS API通信
 aws --profile ${PROFILE} \
     ec2 authorize-security-group-ingress \
         --group-id ${VPCENDPOINT_STORAGEGW_SG_ID} \
         --protocol tcp \
         --port 443 \
+        --cidr ${VPC_CIDR} ;
+
+# for support channel
+aws --profile ${PROFILE} \
+    ec2 authorize-security-group-ingress \
+        --group-id ${VPCENDPOINT_STORAGEGW_SG_ID} \
+        --protocol tcp \
+        --port 22 \
         --cidr ${VPC_CIDR} ;
 
 aws --profile ${PROFILE} \
@@ -215,6 +224,35 @@ aws --profile ${PROFILE} \
         --subnet-id ${PrivateSubnet1Id} ${PrivateSubnet2Id} \
         --security-group-id ${VPCENDPOINT_SG_ID} ;
 ```
+## (4) Storage Gateway管理用のIAMロール(管理サーバ用)作成
+```shell
+POLICY='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+#IAMロールの作成
+aws --profile ${PROFILE} \
+    iam create-role \
+        --role-name "Ec2-StorageGW-AdminRole" \
+        --assume-role-policy-document "${POLICY}" \
+        --max-session-duration 43200
+
+#AWS管理ポリシー(AWSStorageGatewayFullAccess)のアタッチ
+aws --profile ${PROFILE} \
+    iam attach-role-policy \
+        --role-name "Ec2-StorageGW-AdminRole" \
+        --policy-arn arn:aws:iam::aws:policy/AWSStorageGatewayFullAccess
+```
+
 ## (3) Windows/Linuxクライアント、Linux-Manager作成
 <center><img src="./Documents/Step4.png" whdth=500></center>
 
@@ -298,6 +336,32 @@ aws --profile ${PROFILE} \
         --protocol tcp \
         --port 22 \
         --cidr 0.0.0.0/0 ;
+```
+(iiv) セキュリティーグループ設定情報の確認
+```shell
+SSH_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=SshSG' \
+        --query 'SecurityGroups[].GroupId');
+
+RDP_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=RdpSG' \
+        --query 'SecurityGroups[].GroupId');
+
+CLIENT_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=ClientSG' \
+        --query 'SecurityGroups[].GroupId');
+
+MGR_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=Mgr-SshSG' \
+        --query 'SecurityGroups[].GroupId');
+
+#設定情報の表示
+echo -e "SSH_SG_ID   =${SSH_SG_ID}\nRDP_SG_ID   =${RDP_SG_ID}\nCLIENT_SG_ID=${CLIENT_SG_ID}\nMGR_SG_ID   =${MGR_SG_ID}"
+
 ```
 ### (3)-(b)インスタンス作成用の事前情報取得
 ```shell
@@ -668,8 +732,6 @@ aws --profile ${PROFILE} \
             --hosted-zone-id ${HOSTED_ZONE_ID} \
             --change-batch "${CHANGE_BATCH_JSON}";
 ```
-
-
 
 ## (5) ファイルゲートウェイの作成
 ゲートウェイを作成、アクティベーションして利用可能な状態にします。
