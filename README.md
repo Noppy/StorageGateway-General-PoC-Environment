@@ -779,7 +779,7 @@ SGW_SG_ID=$(aws --profile ${PROFILE} --output text \
 
 
 #ファイルゲートウェイインスタンスの起動
-INSTANCE_TYPE=c4.4xlarge
+INSTANCE_TYPE=c5.4xlarge
 TAGJSON='
 [
     {
@@ -808,8 +808,8 @@ BLOCK_DEVICE_MAPPINGS='[
         "Ebs": {
             "DeleteOnTermination": true,
             "VolumeType": "io1",
-            "Iops": 1500,
-            "VolumeSize": 1024,
+            "Iops": 3000,
+            "VolumeSize": 16384,
             "Encrypted": false
         }
     }
