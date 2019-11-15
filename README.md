@@ -1121,7 +1121,7 @@ aws --profile ${PROFILE} \
         --cloud-watch-log-group-arn ${LOG_GROUP_ARN}
 ```
 
-## (7) File Gateway - ファイル共有設定
+## (7) File Gateway - ファイル共有設定(SMB)
 ### (7)-(a) SMB設定(SMBSecurityStrategy)
 ```shell
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
@@ -1165,4 +1165,43 @@ aws --profile ${PROFILE} storagegateway \
         --default-storage-class S3_STANDARD \
         --guess-mime-type-enabled \
         --authentication GuestAccess
+```
+
+## (8) File Gateway - ファイル共有設定(NFS)
+```shell
+#情報取得
+BUCKET_NAME=storagegw-response-bucket-2202100242 #<バケット名を個別に設定>
+BUCKETARN="arn:aws:s3:::${BUCKET_NAME}"
+
+ROLE="StorageGateway-S3AccessRole"
+ROLEARN=$(aws --profile  ${PROFILE} --output text \
+    iam get-role \
+        --role-name "StorageGateway-S3AccessRole" \
+    --query 'Role.Arn')
+
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
+echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
+
+
+#NFSデフォルト設定
+#設定はこちらを参照: https://docs.aws.amazon.com/storagegateway/latest/APIReference/API_NFSFileShareDefaults.html#StorageGateway-Type-NFSFileShareDefaults-OwnerId
+FILE_SHARE_DEFAULT_JSON='{
+    "FileMode": "0666",
+    "DirectoryMode": "0777",
+    "GroupId": 65534,
+    "OwnerId": 65534
+}'
+
+#NFSファイル共有作成
+aws --profile ${PROFILE} storagegateway \
+    create-nfs-file-share \
+        --client-token ${CLIENT_TOKEN} \
+        --gateway-arn "${GATEWAY_ARN}" \
+        --location-arn "${BUCKETARN}" \
+        --role "${ROLEARN}" \
+        --nfs-file-share-defaults "${FILE_SHARE_DEFAULT_JSON}" \
+        --client-list "0.0.0.0/0" \
+        --squash "RootSquash" ;
+
 ```
