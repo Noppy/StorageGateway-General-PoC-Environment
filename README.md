@@ -872,7 +872,7 @@ export PROFILE=default
 
 ### (6)-(b) アクティベーションキーの取得
 ファイルゲートウェイから、 アクティベーションキーを取得します。<br>
-(i)アクティベーション用のURL作成
+#### (i)アクティベーション用のURL作成
 ```shell
 #構成情報取得
 GatewayIP=$(aws --profile ${PROFILE} --output text \
@@ -892,15 +892,16 @@ echo ${GatewayIP} ${REGION} ${VPCEndpointDNSname}
 ACTIVATION_URL="http://${GatewayIP}/?gatewayType=FILE_S3&activationRegion=${REGION}&vpcEndpoint=${VPCEndpointDNSname}&no_redirect"
 echo ${ACTIVATION_URL}
 ```
-参考
+#### (ii)アクティベーションキーの取得
+````shell
+ACTIVATION_EKY=$(curl "${ACTIVATION_URL}")
+````
+参考:
 https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/gateway-private-link.html#GettingStartedActivateGateway-file-vpc
 
-(ii)アクティベーションキーの取得<br>
-LinuxManager上から、生成したURLでアクティベーションキーを取得します。
 ### (6)-(c) ゲートウェイのアクティベーション
 ファイルゲートウェイをアクティベーションします。
 ```shell
-ACTIVATION_KEY=<取得したアクティベーションキーを入力>
 REGION=$(aws --profile ${PROFILE} configure get region)
 aws --profile ${PROFILE} \
     storagegateway activate-gateway \
