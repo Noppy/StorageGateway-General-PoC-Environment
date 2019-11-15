@@ -259,7 +259,7 @@ aws --profile ${PROFILE} \
     iam attach-role-policy \
         --role-name "Ec2-StorageGW-AdminRole" \
         --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
-        
+
 
 #インスタンスプロファイルの作成
 aws --profile ${PROFILE} \
@@ -275,7 +275,7 @@ aws --profile ${PROFILE} \
 <center><img src="./Documents/Step4.png" whdth=500></center>
 
 ### (4)-(a) セキュリティーグループ作成(Bastion)
-(i) Client - SSHログイン用 Security Group
+#### (i) Client - SSHログイン用 Security Group
 ```shell
 # SSHログイン用セキュリティーグループ作成
 SSH_SG_ID=$(aws --profile ${PROFILE} --output text \
@@ -297,7 +297,7 @@ aws --profile ${PROFILE} \
         --port 22 \
         --cidr 0.0.0.0/0 ;
 ```
-(ii) Client - RDPログイン用 Security Group
+#### (ii) Client - RDPログイン用 Security Group
 ```shell
 # RDPログイン用セキュリティーグループ作成
 RDP_SG_ID=$(aws --profile ${PROFILE} --output text \
@@ -319,7 +319,7 @@ aws --profile ${PROFILE} \
         --port 3389 \
         --cidr 0.0.0.0/0 ;
 ```
-(iii) Client識別用 Security Group
+#### (iii) Client識別用 Security Group
 ```shell
 # クライアント識別用セキュリティーグループ作成
 CLIENT_SG_ID=$(aws --profile ${PROFILE} --output text \
@@ -333,7 +333,7 @@ aws --profile ${PROFILE} \
         --resources ${CLIENT_SG_ID} \
         --tags "Key=Name,Value=ClientSG" ;
 ```
-(iv) Manager - SSHログイン用 Security Group
+#### (iv) Manager - SSHログイン用 Security Group
 ```shell
 # SSHログイン用セキュリティーグループ作成
 MGR_SSH_SG_ID=$(aws --profile ${PROFILE} --output text \
@@ -355,7 +355,7 @@ aws --profile ${PROFILE} \
         --port 22 \
         --cidr 0.0.0.0/0 ;
 ```
-(iiv) セキュリティーグループ設定情報の確認
+#### (iiv) セキュリティーグループ設定情報の確認
 ```shell
 SSH_SG_ID=$(aws --profile ${PROFILE} --output text \
         ec2 describe-security-groups \
@@ -516,7 +516,7 @@ Storage Gatewayで利用するS3のバケットと、S3アクセス用にStorage
 <center><img src="./Documents/Step5.png" whdth=500></center>
 
 ### (5)-(a) StorageGateway用のSecurityGroup作成
-(i) SGW用 Security Group
+#### (i) SGW用 Security Group
 ```shell
 # セキュリティーグループID取得
 
@@ -834,6 +834,42 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" \
         --monitoring Enabled=true;
 ```
+### (6)-(b) Mgr-Linuxへのログインとセットアップ
+以後の作業で、Mgr-Linuxを利用するため、sshログインとセットアップを行います。
+#### (i) 作業端末からMgr-Linuxへのログイン(ここではMAC前提)
+```shell
+MgrIP=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-instances  \
+        --filters "Name=tag:Name,Values=Manager-Linux" "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].PublicIpAddress' )
+
+ssh-add
+ssh -A ec2-user@${MgrIP}
+```
+#### (ii) Mgr-Linuxのセットアップ
+以下はSSHログインした、Mgr-Linux上での作業となります。
+```shell
+# ec2-userログインしてからの作業となります。
+
+#AWS Cliアップデート
+curl -o "get-pip.py" "https://bootstrap.pypa.io/get-pip.py" 
+sudo python get-pip.py
+pip install --upgrade --user awscli
+echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+. ~/.bashrc
+
+# AWS cli初期設定
+Region=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed -e 's/.$//')
+aws configure set region ${Region}
+aws configure set output json
+
+#動作確認
+aws sts get-caller-identity
+
+#利用するプロファイル設定
+export PROFILE=default
+```
+
 ### (6)-(b) アクティベーションキーの取得
 ファイルゲートウェイから、 アクティベーションキーを取得します。<br>
 (i)アクティベーション用のURL作成
