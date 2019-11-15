@@ -941,7 +941,8 @@ echo ${ACTIVATION_URL}
 ```
 #### (ii)アクティベーションキーの取得
 ````shell
-ACTIVATION_EKY=$(curl "${ACTIVATION_URL}")
+ACTIVATION_KEY=$(curl "${ACTIVATION_URL}")
+echo ${ACTIVATION_KEY}
 ````
 参考:
 https://docs.aws.amazon.com/ja_jp/storagegateway/latest/userguide/gateway-private-link.html#GettingStartedActivateGateway-file-vpc
