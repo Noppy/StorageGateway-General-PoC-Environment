@@ -260,7 +260,6 @@ aws --profile ${PROFILE} \
         --role-name "Ec2-StorageGW-AdminRole" \
         --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
 
-
 #インスタンスプロファイルの作成
 aws --profile ${PROFILE} \
     iam create-instance-profile \
@@ -680,8 +679,38 @@ aws --profile ${PROFILE} \
         --policy-name "AccessS3buckets" \
         --policy-document "${POLICY}";
 ```
+### (5)-(d) StorageGateway管理用Roleに上記IAMのPassRole権限付与
 
-### (5)-(d) NTP接続不可回避用のRoute53 Private Hosted Zone設定
+
+```shell
+S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
+    iam get-role \
+        --role-name "StorageGateway-S3AccessRole" \
+    --query 'Role.Arn') ;
+
+POLICY='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PassRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "'"${S3AccessRole_ARN}"'"
+      ]
+    }
+  ]
+}'
+#インラインポリシーの設定
+aws --profile ${PROFILE} \
+    iam put-role-policy \
+        --role-name "Ec2-StorageGW-AdminRole" \
+        --policy-name "PassRole" \
+        --policy-document "${POLICY}";
+```
+### (5)-(e) NTP接続不可回避用のRoute53 Private Hosted Zone設定
 ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
 )である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
 ```shell
@@ -1012,7 +1041,9 @@ aws --profile ${PROFILE} storagegateway \
 ### (6)-(g) SMBファイル共有
 ```shell
 #情報取得
-BUCKETARN="arn:aws:s3:::${BUCKET_NAME}" #${BUCKET_NAME}は、バケット作成時に設定した変数
+BUCKET_NAME=<バケット名を個別に設定>
+BUCKETARN="arn:aws:s3:::${BUCKET_NAME}"
+
 ROLE="StorageGateway-S3AccessRole"
 ROLEARN=$(aws --profile  ${PROFILE} --output text \
     iam get-role \
