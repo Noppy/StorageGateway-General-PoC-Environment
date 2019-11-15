@@ -200,6 +200,15 @@ aws --profile ${PROFILE} \
         --subnet-id ${PrivateSubnet1Id} ${PrivateSubnet2Id} \
         --security-group-id ${VPCENDPOINT_STORAGEGW_SG_ID} ;
 
+#StorageGatewayのCloudWatch Log出力用
+aws --profile ${PROFILE} \
+    ec2 create-vpc-endpoint \
+        --vpc-id ${VPCID} \
+        --vpc-endpoint-type Interface \
+        --service-name com.amazonaws.${REGION}.logs \
+        --subnet-id ${PrivateSubnet1Id} ${PrivateSubnet2Id} \
+        --security-group-id ${VPCENDPOINT_STORAGEGW_SG_ID} ;
+
 #SSM用PCEndpoint作成
 aws --profile ${PROFILE} \
     ec2 create-vpc-endpoint \
@@ -611,7 +620,7 @@ aws --profile ${PROFILE} \
         --bucket ${BUCKET_NAME} \
         --create-bucket-configuration LocationConstraint=${REGION};
 ```
-### (5)-(c) StorageGateway用IAMRole作成
+### (5)-(c) StorageGateway ファイル共有-S3アクセス用 IAMRole作成
 ```shell
 POLICY='{
   "Version": "2012-10-17",
@@ -679,8 +688,66 @@ aws --profile ${PROFILE} \
         --policy-name "AccessS3buckets" \
         --policy-document "${POLICY}";
 ```
-### (5)-(d) StorageGateway管理用Roleに上記IAMのPassRole権限付与
+### (5)-(d) StorageGateway - ゲートウェイインスタンス用 IAMRole作成
+CloudWatch Logsへのログ出力のため、ゲートウェイのインスタンスにアタッチするインスタンスrロールを作成します。
+```shell
+POLICY='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+#IAMロールの作成
+aws --profile ${PROFILE} \
+    iam create-role \
+        --role-name "StorageGateway-GatewayInstanceRole" \
+        --assume-role-policy-document "${POLICY}" \
+        --max-session-duration 43200
 
+#In-line Policyの追加
+POLICY='{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowLogs",
+      "Effect": "Allow",
+      "Action": [
+            "logs:CreateLogStream",
+            "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "*"
+      ]
+    }
+  ]
+}'
+#インラインポリシーの設定
+aws --profile ${PROFILE} \
+    iam put-role-policy \
+        --role-name "StorageGateway-GatewayInstanceRole" \
+        --policy-name "AllowCloudWatchLogs" \
+        --policy-document "${POLICY}";
+
+#インスタンスプロファイルの作成
+aws --profile ${PROFILE} \
+    iam create-instance-profile \
+        --instance-profile-name "StorageGateway-GatewayInstanceRole-profile";
+
+aws --profile ${PROFILE} \
+    iam add-role-to-instance-profile \
+        --instance-profile-name "StorageGateway-GatewayInstanceRole-profile" \
+        --role-name "StorageGateway-GatewayInstanceRole" ;
+
+
+```
+### (5)-(e) StorageGateway管理用Roleに上記IAMのPassRole権限付与
 
 ```shell
 S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
@@ -710,7 +777,7 @@ aws --profile ${PROFILE} \
         --policy-name "PassRole" \
         --policy-document "${POLICY}";
 ```
-### (5)-(e) NTP接続不可回避用のRoute53 Private Hosted Zone設定
+### (5)-(f) NTP接続不可回避用のRoute53 Private Hosted Zone設定
 ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
 )である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
 ```shell
@@ -861,7 +928,9 @@ aws --profile ${PROFILE} \
         --security-group-ids ${SGW_SG_ID} \
         --block-device-mappings "${BLOCK_DEVICE_MAPPINGS}" \
         --tag-specifications "${TAGJSON}" \
-        --monitoring Enabled=true;
+        --monitoring Enabled=true \
+        --iam-instance-profile "StorageGateway-GatewayInstanceRole-profile"
+
 ```
 ### (6)-(b) Mgr-Linuxへのログインとセットアップ
 以後の作業で、Mgr-Linuxを利用するため、sshログインとセットアップを行います。
