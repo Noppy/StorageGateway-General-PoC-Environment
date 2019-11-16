@@ -200,15 +200,6 @@ aws --profile ${PROFILE} \
         --subnet-id ${PrivateSubnet1Id} ${PrivateSubnet2Id} \
         --security-group-id ${VPCENDPOINT_STORAGEGW_SG_ID} ;
 
-#StorageGatewayのCloudWatch Log出力用
-aws --profile ${PROFILE} \
-    ec2 create-vpc-endpoint \
-        --vpc-id ${VPCID} \
-        --vpc-endpoint-type Interface \
-        --service-name com.amazonaws.${REGION}.logs \
-        --subnet-id ${PrivateSubnet1Id} ${PrivateSubnet2Id} \
-        --security-group-id ${VPCENDPOINT_STORAGEGW_SG_ID} ;
-
 #SSM用PCEndpoint作成
 aws --profile ${PROFILE} \
     ec2 create-vpc-endpoint \
@@ -651,7 +642,7 @@ aws --profile ${PROFILE} \
         --assume-role-policy-document "${POLICY}" \
         --max-session-duration 43200
 
-#In-line Policyの追加
+#S3バケットアクセス用 In-line Policyの追加
 POLICY='{
   "Version": "2012-10-17",
   "Statement": [
@@ -687,7 +678,20 @@ POLICY='{
       "Resource": [
         "arn:aws:s3:::'"${BUCKET_NAME}"'/*"
       ]
-    },
+    }
+  ]
+}'
+#インラインポリシーの設定
+aws --profile ${PROFILE} \
+    iam put-role-policy \
+        --role-name "StorageGateway-S3AccessRole" \
+        --policy-name "AccessS3buckets" \
+        --policy-document "${POLICY}";
+
+#CloudWatch Logs用 In-line Policyの追加
+POLICY='{
+  "Version": "2012-10-17",
+  "Statement": [
     {
       "Sid": "AllowLogs",
       "Effect": "Allow",
@@ -705,7 +709,7 @@ POLICY='{
 aws --profile ${PROFILE} \
     iam put-role-policy \
         --role-name "StorageGateway-S3AccessRole" \
-        --policy-name "AccessS3buckets" \
+        --policy-name "PutCLoudWatchLogs" \
         --policy-document "${POLICY}";
 
 ```
