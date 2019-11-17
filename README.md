@@ -155,14 +155,7 @@ aws --profile ${PROFILE} \
         --port 443 \
         --cidr ${VPC_CIDR} ;
 
-# for support channel
-aws --profile ${PROFILE} \
-    ec2 authorize-security-group-ingress \
-        --group-id ${VPCENDPOINT_STORAGEGW_SG_ID} \
-        --protocol tcp \
-        --port 22 \
-        --cidr ${VPC_CIDR} ;
-
+#client-cp接続:Port 1026, proxy-app接続:Port1028
 aws --profile ${PROFILE} \
     ec2 authorize-security-group-ingress \
         --group-id ${VPCENDPOINT_STORAGEGW_SG_ID} \
@@ -170,6 +163,7 @@ aws --profile ${PROFILE} \
         --port 1026-1028 \
         --cidr ${VPC_CIDR} ;
 
+#dp-1接続:Port1031
 aws --profile ${PROFILE} \
     ec2 authorize-security-group-ingress \
         --group-id ${VPCENDPOINT_STORAGEGW_SG_ID} \
@@ -177,6 +171,7 @@ aws --profile ${PROFILE} \
         --port 1031 \
         --cidr ${VPC_CIDR} ;
 
+# Support-channel用(GWからEndpintの2222にsshする)
 aws --profile ${PROFILE} \
     ec2 authorize-security-group-ingress \
         --group-id ${VPCENDPOINT_STORAGEGW_SG_ID} \
