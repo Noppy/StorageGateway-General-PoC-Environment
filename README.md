@@ -889,7 +889,7 @@ aws --profile ${PROFILE} \
         --security-group-ids ${SGW_SG_ID} \
         --block-device-mappings "${BLOCK_DEVICE_MAPPINGS}" \
         --tag-specifications "${TAGJSON}" \
-        --monitoring Enabled=true s;
+        --monitoring Enabled=true ;
 
 ```
 ### (7)-(b) Mgr-Linuxへのログインとセットアップ
