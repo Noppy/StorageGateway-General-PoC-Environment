@@ -1079,7 +1079,7 @@ aws --profile ${PROFILE} \
 NFSのファイル共有を作成し、LinuxクライアントからNFS接続します。
 <img src="./Documents/Step8.png" whdth=500>
 
-### (i)情報の確認と設定(S3, IAMロール、ゲートウェイ)
+### (8)-(a)情報の確認と設定(S3, IAMロール、ゲートウェイ)
 Linux Managerで下記設定を実行します。
 上記(6)で作成したS3バケット以外のバケットを利用する場合は、(6)-(c)で作成した、"StorageGateway-S3AccessRole"ロールのリソース句に該当のS3バケットを追加してください。
 ```shell
@@ -1097,7 +1097,7 @@ GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateway
 CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
 echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
 ```
-### (ii)ファイル共有(NFS)の作成
+### (8)-(b)ファイル共有(NFS)の作成
 ```shell
 #NFSデフォルト設定
 #設定はこちらを参照: https://docs.aws.amazon.com/storagegateway/latest/APIReference/API_NFSFileShareDefaults.html#StorageGateway-Type-NFSFileShareDefaults-OwnerId
@@ -1120,7 +1120,7 @@ aws --profile ${PROFILE} storagegateway \
         --squash "RootSquash" ;
 ```
 
-### (iii) Linuxクライアントからの接続
+### (8)-(c) Linuxクライアントからの接続
 作業端末から、Linuxクライアントに接続し、NFSマウントを実行します。
 ```shell
 以後の作業で、Linux-Clientを利用するため、sshログインとセットアップを行います。
@@ -1134,15 +1134,29 @@ LinuxClinetIP=$(aws --profile ${PROFILE} --output text \
 ssh-add
 ssh -A ec2-user@${LinuxClinetIP}
 ```
+Linux-Clientにユーザ"ec2-user"でログイン完了した後に、下記コマンドでNFSマウントします。
+```shell
+sudo -i
 
+#情報の設定と確認
+FGWIP=<ファイルGWのPrivateIPを設定>
+EXPORT_PATH=<ファイル共有のエクスポートパス情報を(/から始まる情報)を設定>
+echo -e "FGWIP=${FGWIP}\nEXPORT_PATH=${EXPORT_PATH}"
+```
+情報確認後、マウント設定を行います。
+```shell
+mkdir /nfs
 
+#/etc/fstabへのマウントポイント追加 $ mount実行
+echo "${FGWIP}:${EXPORT_PATH}   /nfs     nfs    nolock,hard       0   2" >> /etc/fstab
 
-
-
-
-
-
+mount -a
+df
+```
 ## (9) File Gateway - ファイル共有設定(SMB - Guest Access)
+ActiveDirectoryを利用しない、ゲストアクセスタイプのSMBのファイル共有を作成し、WindowsクライアントからSMB(ゲストアクセス)接続します。
+<img src="./Documents/Step9.png" whdth=500>
+
 ### (9)-(a) SMB設定(SMBSecurityStrategy)
 ```shell
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
