@@ -1155,6 +1155,7 @@ df
 ```
 ## (9) File Gateway - ファイル共有設定(SMB - Guest Access)
 ActiveDirectoryを利用しない、ゲストアクセスタイプのSMBのファイル共有を作成し、WindowsクライアントからSMB(ゲストアクセス)接続します。
+Linux Managerで下記設定を実行します。
 <img src="./Documents/Step9.png" whdth=500>
 
 ### (9)-(a) SMB設定(SMBSecurityStrategy)
@@ -1175,6 +1176,7 @@ aws --profile ${PROFILE} storagegateway \
         --password ${PASSWORD}
 ```
 ### (9)-(c) SMBファイル共有
+上記(6)で作成したS3バケット以外のバケットを利用する場合は、(6)-(c)で作成した、"StorageGateway-S3AccessRole"ロールのリソース句に該当のS3バケットを追加してください。
 ```shell
 #情報取得
 BUCKET_NAME=<バケット名を個別に設定>
@@ -1201,6 +1203,10 @@ aws --profile ${PROFILE} storagegateway \
         --guess-mime-type-enabled \
         --authentication GuestAccess
 ```
+### (9)-(d) Windows-ClinetからのSMBアクセス
+Windows ClinetにRDPログインし、SMB接続をします。
+説明は省略します。
+
 ## (10) File Gateway - ファイル共有設定(SMB - Active Directory)
 
 別途準備
