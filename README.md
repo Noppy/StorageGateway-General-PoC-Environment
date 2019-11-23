@@ -1075,8 +1075,75 @@ aws --profile ${PROFILE} \
         --cloud-watch-log-group-arn ${LOG_GROUP_ARN}
 ```
 
-## (8) File Gateway - ファイル共有設定(SMB)
-### (8)-(a) SMB設定(SMBSecurityStrategy)
+## (8) File Gateway - ファイル共有設定(NFS)
+NFSのファイル共有を作成し、LinuxクライアントからNFS接続します。
+<img src="./Documents/Step8.png" whdth=500>
+
+### (i)情報の確認と設定(S3, IAMロール、ゲートウェイ)
+Linux Managerで下記設定を実行します。
+上記(6)で作成したS3バケット以外のバケットを利用する場合は、(6)-(c)で作成した、"StorageGateway-S3AccessRole"ロールのリソース句に該当のS3バケットを追加してください。
+```shell
+#情報取得
+BUCKET_NAME=<バケット名を個別に設定>
+BUCKETARN="arn:aws:s3:::${BUCKET_NAME}"
+
+ROLE="StorageGateway-S3AccessRole"
+ROLEARN=$(aws --profile  ${PROFILE} --output text \
+    iam get-role \
+        --role-name "StorageGateway-S3AccessRole" \
+    --query 'Role.Arn')
+
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
+echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
+```
+### (ii)ファイル共有(NFS)の作成
+```shell
+#NFSデフォルト設定
+#設定はこちらを参照: https://docs.aws.amazon.com/storagegateway/latest/APIReference/API_NFSFileShareDefaults.html#StorageGateway-Type-NFSFileShareDefaults-OwnerId
+FILE_SHARE_DEFAULT_JSON='{
+    "FileMode": "0666",
+    "DirectoryMode": "0777",
+    "GroupId": 65534,
+    "OwnerId": 65534
+}'
+
+#NFSファイル共有作成
+aws --profile ${PROFILE} storagegateway \
+    create-nfs-file-share \
+        --client-token ${CLIENT_TOKEN} \
+        --gateway-arn "${GATEWAY_ARN}" \
+        --location-arn "${BUCKETARN}" \
+        --role "${ROLEARN}" \
+        --nfs-file-share-defaults "${FILE_SHARE_DEFAULT_JSON}" \
+        --client-list "0.0.0.0/0" \
+        --squash "RootSquash" ;
+```
+
+### (iii) Linuxクライアントからの接続
+作業端末から、Linuxクライアントに接続し、NFSマウントを実行します。
+```shell
+以後の作業で、Linux-Clientを利用するため、sshログインとセットアップを行います。
+#### (i) 作業端末からMgr-Linuxへのログイン(ここではMAC前提)
+```shell
+LinuxClinetIP=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-instances  \
+        --filters "Name=tag:Name,Values=Linux-Client" "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].PublicIpAddress' )
+
+ssh-add
+ssh -A ec2-user@${LinuxClinetIP}
+```
+
+
+
+
+
+
+
+
+## (9) File Gateway - ファイル共有設定(SMB - Guest Access)
+### (9)-(a) SMB設定(SMBSecurityStrategy)
 ```shell
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
 
@@ -1085,7 +1152,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --smb-security-strategy MandatoryEncryption
 ```
-### (8)-(b) ゲストアクセス用の SMB ファイル共有を設定
+### (9)-(b) ゲストアクセス用の SMB ファイル共有を設定
 ```shell
 PASSWORD="HogeHoge@"
 aws --profile ${PROFILE} storagegateway \
@@ -1093,7 +1160,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN} \
         --password ${PASSWORD}
 ```
-### (8)-(c) SMBファイル共有
+### (9)-(c) SMBファイル共有
 ```shell
 #情報取得
 BUCKET_NAME=<バケット名を個別に設定>
@@ -1120,42 +1187,6 @@ aws --profile ${PROFILE} storagegateway \
         --guess-mime-type-enabled \
         --authentication GuestAccess
 ```
+## (10) File Gateway - ファイル共有設定(SMB - Active Directory)
 
-## (9) File Gateway - ファイル共有設定(NFS)
-```shell
-#情報取得
-BUCKET_NAME=storagegw-response-bucket-2202100242 #<バケット名を個別に設定>
-BUCKETARN="arn:aws:s3:::${BUCKET_NAME}"
-
-ROLE="StorageGateway-S3AccessRole"
-ROLEARN=$(aws --profile  ${PROFILE} --output text \
-    iam get-role \
-        --role-name "StorageGateway-S3AccessRole" \
-    --query 'Role.Arn')
-
-GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
-CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
-echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
-
-
-#NFSデフォルト設定
-#設定はこちらを参照: https://docs.aws.amazon.com/storagegateway/latest/APIReference/API_NFSFileShareDefaults.html#StorageGateway-Type-NFSFileShareDefaults-OwnerId
-FILE_SHARE_DEFAULT_JSON='{
-    "FileMode": "0666",
-    "DirectoryMode": "0777",
-    "GroupId": 65534,
-    "OwnerId": 65534
-}'
-
-#NFSファイル共有作成
-aws --profile ${PROFILE} storagegateway \
-    create-nfs-file-share \
-        --client-token ${CLIENT_TOKEN} \
-        --gateway-arn "${GATEWAY_ARN}" \
-        --location-arn "${BUCKETARN}" \
-        --role "${ROLEARN}" \
-        --nfs-file-share-defaults "${FILE_SHARE_DEFAULT_JSON}" \
-        --client-list "0.0.0.0/0" \
-        --squash "RootSquash" ;
-
-```
+別途準備
