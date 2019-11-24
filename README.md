@@ -1317,7 +1317,10 @@ aws --profile ${PROFILE} \
 Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server
 ```
 詳細はこちらを参照：https://docs.aws.amazon.com/ja_jp/directoryservice/latest/admin-guide/microsoftadbasestep3.html
-+ `コントロールパネル`-`ネットワーク設定`から、ネットワーク設定で優先MS `ADのDNSアドレス`を入力する
+<br>
+ツールのセットアップが完了したら、以下の手順でドメイン参加させます。
++ `コントロールパネル`-`ネットワーク設定`から、ネットワーク設定で優先MS `ADのDNSアドレス(IPアドレス)`を入力する
 + `コントロールパネル`-`システム`から`コンピュータ名/ドメイン名の変更`を開き、所属グループで、`ドメイン`を選択しADの`Directory DNS name`を指定する
++ ユーザとパスワードを聞かれたら、ユーザー`admin`、パスワードは`AD作成時に指定したパスワード`を指定する
 + リブートすると、WIndowsがドメインに所属される
 + ADのAdminユーザでRPDからログインして状態を確認する
