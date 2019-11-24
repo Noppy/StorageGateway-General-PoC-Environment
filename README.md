@@ -1209,4 +1209,115 @@ Windows ClinetにRDPログインし、SMB接続をします。
 
 ## (10) File Gateway - ファイル共有設定(SMB - Active Directory)
 
-別途準備
+
+### (10)-(a) AWS Managed Microsoft AD作成
+作業端末で作業を実施ます。
+#### (i)情報収集
+```shell
+PROFILE=<プロファイルを指定>
+
+#構成情報取得
+VPCID=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`VpcId`].[OutputValue]')
+
+PublicSubnet2Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PublicSubnet2Id`].[OutputValue]')
+
+PrivateSubnet1Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet1Id`].[OutputValue]')
+
+PrivateSubnet2Id=$(aws --profile ${PROFILE} --output text \
+    cloudformation describe-stacks \
+        --stack-name SGWPoC-VPC \
+        --query 'Stacks[].Outputs[?OutputKey==`PrivateSubnet2Id`].[OutputValue]')
+
+echo -e "VPCID=$VPCID\nPublicSubnet2Id=${PublicSubnet2Id}\nPrivateSubnet1Id=$PrivateSubnet1Id\nPrivateSubnet2Id=$PrivateSubnet2Id\n"
+```
+#### (ii) Managed Microsoft AD(MAD)作成のための情報設定
+```shell
+AD_NAME="sgwpoc.local"
+AD_PASSWORD="SgwPoCAdAdm@"
+AD_EDITION="Standard"           #Enterprise or Standard
+KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。  
+```
+* ADのパスワードは、8～64 文字で指定し、「admin」という語は含めず、英小文字、英大文字、数字、特殊文字の 4 つのカテゴリのうちの 3 つを含める必要があります。
+
+#### (iii) Managed Microsoft AD(MAD)作成
+MADを作成します。MADのENIに付与されるセキュリティーグループは、ADサービスが自動的に作成します。
+```shell
+# MAD作成
+aws --profile ${PROFILE} ds \
+    create-microsoft-ad \
+        --name "${AD_NAME}" \
+        --short-name "SgwPoC" \
+        --description "AD for StorageGateway PoC" \
+        --password "${AD_PASSWORD}" \
+        --edition "${AD_EDITION}" \
+        --vpc-settings "VpcId=${VPCID},SubnetIds=${PrivateSubnet1Id},${PrivateSubnet2Id}" ;
+```
+### (10)-(b) AD管理用のWindows-AD-Mgr作成
+#### (i)構成情報取得
+```shell
+KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。 
+INSTANCE_TYPE="t2.micro"
+
+#以下は自動取得
+WIN2019_AMIID=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-images \
+        --owners amazon \
+        --filters 'Name=name,Values=Windows_Server-2019-Japanese-Full-Base-????.??.??' \
+                  'Name=state,Values=available' \
+        --query 'reverse(sort_by(Images, &CreationDate))[:1].ImageId' ) ;
+
+RDP_SG_ID=$(aws --profile ${PROFILE} --output text \
+        ec2 describe-security-groups \
+                --filter 'Name=group-name,Values=RdpSG' \
+        --query 'SecurityGroups[].GroupId');
+
+#設定確認
+echo -e "KEYNAME=${KEYNAME}\nINSTANCE_TYPE=${INSTANCE_TYPE}\nWIN2019_AMIID=${WIN2019_AMIID}\nRDP_SG_ID=${RDP_SG_ID}"
+```
+#### (ii) インスタンス作成
+```shell
+#タグ設定
+TAGJSON='
+[
+    {
+        "ResourceType": "instance",
+        "Tags": [
+            {
+                "Key": "Name",
+                "Value": "Windows-AD-Mgr"
+            }
+        ]
+    }
+]'
+
+# サーバの起動
+aws --profile ${PROFILE} \
+    ec2 run-instances \
+        --image-id ${WIN2019_AMIID} \
+        --instance-type ${INSTANCE_TYPE} \
+        --key-name ${KEYNAME} \
+        --subnet-id ${PublicSubnet2Id} \
+        --security-group-ids ${RDP_SG_ID} \
+        --associate-public-ip-address \
+        --tag-specifications "${TAGJSON}" ;
+```
+### (10)-(c) AD管理用のWindows-AD-MgrへのAD管理ツールセットアップとAD参加
+* Windows-AD-MgrにRDPでログインする
+* AD管理に必要なツールをPowerShellでインストールする
+```shell
+Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server
+```
+詳細はこちらを参照：https://docs.aws.amazon.com/ja_jp/directoryservice/latest/admin-guide/microsoftadbasestep3.html
++ `コントロールパネル`-`ネットワーク設定`から、ネットワーク設定で優先MS `ADのDNSアドレス`を入力する
++ `コントロールパネル`-`システム`から`コンピュータ名/ドメイン名の変更`を開き、所属グループで、`ドメイン`を選択しADの`Directory DNS name`を指定する
++ リブートすると、WIndowsがドメインに所属される
++ ADのAdminユーザでRPDからログインして状態を確認する
