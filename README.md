@@ -1208,7 +1208,8 @@ Windows ClinetにRDPログインし、SMB接続をします。
 説明は省略します。
 
 ## (10) File Gateway - ファイル共有設定(SMB - Active Directory)
-
+ファイルゲートウェイとクライアントのWindowsサーバをADに参加させ、AD認証でファイル共有する手順です。この手順ではADに AWS Directory Serviceの[AWS Managed Microsoft AD](https://docs.aws.amazon.com/ja_jp/directoryservice/latest/admin-guide/directory_microsoft_ad.html)を利用しています。
+<img src="./Documents/Step10.png" whdth=500>
 
 ### (10)-(a) AWS Managed Microsoft AD作成
 作業端末で作業を実施ます。
