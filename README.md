@@ -1242,9 +1242,9 @@ echo -e "VPCID=$VPCID\nPublicSubnet2Id=${PublicSubnet2Id}\nPrivateSubnet1Id=$Pri
 #### (ii) Managed Microsoft AD(MAD)作成のための情報設定
 ```shell
 AD_NAME="sgwpoc.local"
-AD_PASSWORD="SgwPoCAdAdm@"
 AD_EDITION="Standard"           #Enterprise or Standard
-KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。  
+KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。 
+AD_PASSWORD="$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)${RANDOM}"
 ```
 * ADのパスワードは、8～64 文字で指定し、「admin」という語は含めず、英小文字、英大文字、数字、特殊文字の 4 つのカテゴリのうちの 3 つを含める必要があります。
 
@@ -1323,4 +1323,111 @@ Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-AD
 + `コントロールパネル`-`システム`から`コンピュータ名/ドメイン名の変更`を開き、所属グループで、`ドメイン`を選択しADの`Directory DNS name`を指定する
 + ユーザとパスワードを聞かれたら、ユーザー`admin`、パスワードは`AD作成時に指定したパスワード`を指定する
 + リブートすると、WIndowsがドメインに所属される
-+ ADのAdminユーザでRPDからログインして状態を確認する
++ `AD`の`Admin`ユーザでRPDからログインする
++ `ServerManager`を起動し、右上のメニューバーから`tool`->`ActiveDirectory Users and Computers`を選択し、ドメインの構成情報が参照できることを確認する
+
+### (10)-(d) Windowsクライアントのドメイン参加
+Windows-Clientインスタンスについて、(10)-(C)と同じ手順で、ADに参加させます。
+### (10)-(e) ファイルゲートウェイのドメイン参加
+
+### (i) ファイルゲートウェイのDNS設定変更
+ファイルゲートウェイのDNS参照先を、ADに変更します。変更は、ファイルゲートウェイにssh接続して変更します。
+```shell
+#Linux-Mgrにログイン
+MgrIP=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-instances  \
+        --filters "Name=tag:Name,Values=Manager-Linux" "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].PublicIpAddress' )
+
+ssh-add
+ssh -A ec2-user@${MgrIP}
+```
+
+```shell
+#ゲートウェイのIP取得
+GatewayIP=$(aws --output text ec2 describe-instances --query 'Reservations[*].Instances[*].PrivateIpAddress' --filters "Name=tag:Name,Values=Fgw" "Name=instance-state-name,Values=running")
+
+#sshログイン
+ssh admin@${GatewayIP}
+```
+ファイルゲートウェイの下記メニューが表示されたら、以下の箇条書きの内容を参考にDNS設定を行います。
+```shell
+	AWS Storage Gateway - Configuration
+
+	#######################################################################
+	##  Currently connected network adapters:
+	##
+	##  eth0: 10.1.163.138	
+	#######################################################################
+
+	1: HTTP/SOCKS Proxy Configuration
+	2: Network Configuration
+	3: Test Network Connectivity
+	4: View System Resource Check (0 Errors)
+	5: License Information
+	6: Command Prompt
+
+	Press "x" to exit session
+
+        Enter command: 
+```
+* `Network Configuration`を選び、`Edit DNS Configuration`を選択
+* `Available adapters`で`eth0`を入力
+* `Assign by DHCP [y/n]:`は、DNSを静的設定するため`n`を選択
+* `Enter primary DNS`と`Enter secondary DNS`に、ADの`DNSアドレス`のIPアドレスを指定
+* `	Apply config [y/n]:`で`y`で設定反映する
+* 終了する
+
+#### (ii)ゲートウェイのAD参加
+```shell
+#一般設定
+PROFILE="default"
+#AD設定
+AD_DOMAIN_NAME="sgwpoc.local"
+AD_USER="admin"
+# AD_PASSWORD="< (10)-(a) (ii)で設定したパスワード>"
+
+#ゲートウェイID取得
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+
+# 実行
+aws --profile ${PROFILE} \
+    storagegateway join-domain \
+        --gateway-arn ${GATEWAY_ARN} \
+        --domain-name ${AD_DOMAIN_NAME} \
+        --user-name ${AD_USER} \
+        --password ${AD_PASSWORD} ; 
+```
+#### (iii) SMBファイル共有(AD認証)の作成
+上記(6)で作成したS3バケット以外のバケットを利用する場合は、(6)-(c)で作成した、"StorageGateway-S3AccessRole"ロールのリソース句に該当のS3バケットを追加してください。
+```shell
+#情報取得
+BUCKET_NAME=storagegw-bucket-smb-ad #<バケット名を個別に設定>
+BUCKETARN="arn:aws:s3:::${BUCKET_NAME}"
+
+ROLE="StorageGateway-S3AccessRole"
+ROLEARN=$(aws --profile  ${PROFILE} --output text \
+    iam get-role \
+        --role-name "StorageGateway-S3AccessRole" \
+    --query 'Role.Arn')
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
+echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
+
+#実行
+aws --profile ${PROFILE} storagegateway \
+    create-smb-file-share \
+        --client-token ${CLIENT_TOKEN} \
+        --gateway-arn "${GATEWAY_ARN}" \
+        --location-arn "${BUCKETARN}" \
+        --role "${ROLEARN}" \
+        --object-acl bucket-owner-full-control \
+        --default-storage-class S3_STANDARD \
+        --guess-mime-type-enabled \
+        --authentication ActiveDirectory
+```
+#### (iv) Windows-Clientからの接続
+クライアントから接続確認します。
+```shell
+net use [WindowsDriveLetter]: \\10.1.163.138\storagegw-bucket-smb-ad
+```
