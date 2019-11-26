@@ -1246,6 +1246,10 @@ AD_NAME="sgwpoc.local"
 AD_EDITION="Standard"           #Enterprise or Standard
 KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。 
 AD_PASSWORD="$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)${RANDOM}"
+
+#パスワードを控える
+echo ${AD_PASSWORD}  #￥表示されたパスワードは後の手順で利用するためメモしておく
+
 ```
 * ADのパスワードは、8～64 文字で指定し、「admin」という語は含めず、英小文字、英大文字、数字、特殊文字の 4 つのカテゴリのうちの 3 つを含める必要があります。
 
@@ -1431,4 +1435,33 @@ aws --profile ${PROFILE} storagegateway \
 クライアントから接続確認します。
 ```shell
 net use [WindowsDriveLetter]: \\10.1.163.138\storagegw-bucket-smb-ad
+```
+
+## (11)運用その他
+### (11)-(a) キャッシュリフレッシュ
+### (11)-(b) ソフトウェアアップデート
+#### (i)構成確認
+```shell
+#構成情報の取得
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+
+#アップデート状況の確認
+#"NextUpdateAvailabilityDate"と、"LastSoftwareUpdate"を確認します。
+aws --profile ${PROFILE} storagegateway \
+    describe-gateway-information \
+        --gateway-arn ${GATEWAY_ARN};
+```
+#### (ii)ソフトウェアアップデート
+```shell
+aws --profile ${PROFILE} storagegateway \
+    update-gateway-software-now \
+        --gateway-arn ${GATEWAY_ARN};
+```
+#### (iii)アップデート確認
+```shell
+#アップデート状況の確認
+#"NextUpdateAvailabilityDate"が表示されなくなり、"LastSoftwareUpdate"が直近の時間に変更されていることを確認します。
+aws --profile ${PROFILE} storagegateway \
+    describe-gateway-information \
+        --gateway-arn ${GATEWAY_ARN};
 ```
