@@ -1497,7 +1497,7 @@ aws --profile ${PROFILE} storagegateway \
     describe-gateway-information \
         --gateway-arn ${GATEWAY_ARN};
 ```
-### (11)-(c) イベント連携
+### (11)-(c) イベント連携(リフレッシュ完了通知のイベント連携)
 
 ### (i)SNS準備
 ```shell
