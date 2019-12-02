@@ -1553,7 +1553,6 @@ EVENT_PATTERN='
     "Storage Gateway Refresh Cache Event"
   ]
 }'
-EVENT_PATTERN=$(echo ${EVENT_PATTERN} | sed -e "s/[\r\n]\+//g")
 
 # Event Rule作成
 aws --profile ${PROFILE} --output text events \
