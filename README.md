@@ -1439,6 +1439,38 @@ net use [WindowsDriveLetter]: \\10.1.163.138\storagegw-bucket-smb-ad
 
 ## (11)運用その他
 ### (11)-(a) キャッシュリフレッシュ
+#### (i)対象バケット全体をリフレッシュする
+```shell
+FILE_SHARE_ARN="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-6C4D2D0F"
+FOLDER_LIST='/'
+
+#リフレッシュの実行(デフォルトの動作)
+aws --profile ${PROFILE} storagegateway \
+    refresh-cache \
+        --file-share-arn ${FILE_SHARE_ARN} \
+        --folder-list ${FOLDER_LIST} \
+        --recursive ;
+```
+* デフォルト(パラメータ未指定)では、下記条件でリフレッシュされる
+    * --folder-list: "/"(バケット全体が対象)
+    * --recursive: フォルダーリストで指定したフォルダから、登録済みのサブフォルダを再帰的にリフレッシュする
+
+#### (ii)特定のフォルダをリフレッシュする
+```shell
+FILE_SHARE_ARN=ファイル共有のARNを設定
+FOLDER_LIST='/test2 /test3'
+
+#ファイル共有のARNは、
+#”aws --profile ${PROFILE} storagegateway list-file-shares”で確認
+
+#リフレッシュの実行(デフォルトの動作)
+aws --profile ${PROFILE} storagegateway \
+    refresh-cache \
+        --file-share-arn ${FILE_SHARE_ARN} \
+        --folder-list ${FOLDER_LIST} \
+        --recursive ;
+```
+
 ### (11)-(b) ソフトウェアアップデート
 #### (i)構成確認
 ```shell
@@ -1464,4 +1496,136 @@ aws --profile ${PROFILE} storagegateway \
 aws --profile ${PROFILE} storagegateway \
     describe-gateway-information \
         --gateway-arn ${GATEWAY_ARN};
+```
+### (11)-(c) イベント連携
+
+### (i)SNS準備
+```shell
+EMAIL_ADDRESS='email@address'
+
+#Topicの作成
+TOPIC_ARN=$(aws --profile ${PROFILE} --output text \
+    sns create-topic \
+        --name Sgw-Topic)
+
+#Sbscribeでメールを設定
+aws --profile ${PROFILE} sns \
+    subscribe \
+        --topic-arn ${TOPIC_ARN} \
+        --protocol email \
+        --notification-endpoint ${EMAIL_ADDRESS}
+        
+#設定したメールアドレスに、確認メールが届くので"Confirm subscription"をクリックし、承認します。
+
+#メール送信テスト
+aws --profile ${PROFILE} sns \
+    publish \
+        --topic-arn ${TOPIC_ARN} \
+        --message 'Hello World!!' ;
+```
+
+### (ii)CloudWatch Events Roule作成とSNS Topicリソースポリシー変更
+StorageGatewayのリフレッシュキャッシュの完了通知を受けて、作成したSNS Topicに連携する、Eventsのルールを作成します。
+```shell
+#構成情報の取得
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+
+FILE_SHARE_ARNs=$(aws --profile ${PROFILE} --output text \
+    storagegateway list-file-shares \
+        --gateway-arn ${GATEWAY_ARN} \
+    --query FileShareInfoList[].FileShareARN )
+
+TOPIC_ARN=$( aws --profile ${PROFILE} --output text \
+    sns list-topics | awk '/Sgw-Topic/{print $2}' )
+
+ACCOUNT_ID=$(aws --profile ${PROFILE} --output text \
+    sts get-caller-identity --query 'Account')
+
+#ルールパターン用JSON生成
+EVENT_PATTERN='
+{
+  "source": [
+    "aws.storagegateway"
+  ],
+  "resources":['"$( echo $(for i in $FILE_SHARE_ARNs;do echo '"'"${i}"'",';done)|sed -e 's/,$//')"'
+  ],
+  "detail-type": [
+    "Storage Gateway Refresh Cache Event"
+  ]
+}'
+EVENT_PATTERN=$(echo ${EVENT_PATTERN} | sed -e "s/[\r\n]\+//g")
+
+# Event Rule作成
+aws --profile ${PROFILE} --output text events \
+    put-rule \
+        --name SgwPoc-Finish-RefleshCache \
+        --description "Receive notification of completion of specified file gateways RefreshCache and notify SNS topic" \
+        --event-pattern "${EVENT_PATTERN}" \
+        --schedule-expression "" \
+        --state ENABLED ;
+
+#ルールにターゲット設定
+aws --profile ${PROFILE} events \
+    put-targets \
+        --rule SgwPoc-Finish-RefleshCache \
+        --targets "Id=1,Arn=${TOPIC_ARN},Input=,InputPath=";
+
+#SNS Topicのリソースポリシーにeventsのallowを追加
+JSON='{
+  "Version": "2012-10-17",
+  "Id": "__default_policy_ID",
+  "Statement": [
+    {
+      "Sid": "__default_statement_ID",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "SNS:GetTopicAttributes",
+        "SNS:SetTopicAttributes",
+        "SNS:AddPermission",
+        "SNS:RemovePermission",
+        "SNS:DeleteTopic",
+        "SNS:Subscribe",
+        "SNS:ListSubscriptionsByTopic",
+        "SNS:Publish",
+        "SNS:Receive"
+      ],
+      "Resource": "'"${TOPIC_ARN}"'",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceOwner": "'"${ACCOUNT_ID}"'"
+        }
+      }
+    },
+    {
+      "Sid": "AWSEvents_SgwPoc-Finish-RefleshCache_1",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "events.amazonaws.com"
+      },
+      "Action": "sns:Publish",
+      "Resource": "'"${TOPIC_ARN}"'"
+    }
+  ]
+}'
+#
+aws --profile ${PROFILE} sns \
+    set-topic-attributes \
+        --topic-arn ${TOPIC_ARN} \
+        --attribute-name Policy \
+        --attribute-value "${JSON}"
+```
+### (iii)リフレッシュ実行
+```shell
+FILE_SHARE_ARN="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-6C4D2D0F"
+FOLDER_LIST='/'
+
+#リフレッシュの実行(デフォルトの動作)
+aws --profile ${PROFILE} \
+    storagegateway refresh-cache \
+        --file-share-arn ${FILE_SHARE_ARN} \
+        --folder-list ${FOLDER_LIST} \
+        --recursive  ;
 ```
