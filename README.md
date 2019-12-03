@@ -1498,6 +1498,7 @@ aws --profile ${PROFILE} storagegateway \
         --gateway-arn ${GATEWAY_ARN};
 ```
 ### (11)-(c) イベント連携(リフレッシュ完了通知のイベント連携)
+<img src="./Documents/Step11.png" whdth=500>
 
 ### (i)SNS準備
 ```shell
@@ -1628,3 +1629,59 @@ aws --profile ${PROFILE} \
         --folder-list ${FOLDER_LIST} \
         --recursive  ;
 ```
+### (11)-(d) イベント連携(ファイルアップロード完了通知)
+(11)-(c)のリフレッシュ完了通知と同じSNS Topicを利用し、ファイルのアップロード完了通知を行います。本作業の前提として、(11)-(c)の設定済みであることとします。
+#### (i) CloudWatch Events設定
+```shell
+#構成情報の取得
+GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
+
+FILE_SHARE_ARNs=$(aws --profile ${PROFILE} --output text \
+    storagegateway list-file-shares \
+        --gateway-arn ${GATEWAY_ARN} \
+    --query FileShareInfoList[].FileShareARN )
+
+TOPIC_ARN=$( aws --profile ${PROFILE} --output text \
+    sns list-topics | awk '/Sgw-Topic/{print $2}' )
+
+#ルールパターン用JSON生成
+EVENT_PATTERN='
+{
+  "source": [
+    "aws.storagegateway"
+  ],
+  "resources":['"$( echo $(for i in $FILE_SHARE_ARNs;do echo '"'"${i}"'",';done)|sed -e 's/,$//')"'
+  ],
+  "detail-type": [
+    "Storage Gateway File Upload Event"
+  ]
+}'
+
+# Event Rule作成
+aws --profile ${PROFILE} --output text events \
+    put-rule \
+        --name SgwPoc-Finish-File-Upload \
+        --description "Receive notification of completion of specified file gateways files upload and notify SNS topic" \
+        --event-pattern "${EVENT_PATTERN}" \
+        --schedule-expression "" \
+        --state ENABLED ;
+
+#ルールにターゲット設定
+aws --profile ${PROFILE} events \
+    put-targets \
+        --rule SgwPoc-Finish-File-Upload  \
+        --targets "Id=1,Arn=${TOPIC_ARN},Input=,InputPath=";
+```
+
+#### (ii) アップロード完了通知設定
+```shell
+#Notificationの設定
+#何らかファイルコピー実行と同時に、下記のnotify-when-uploadedを実行
+
+FILE_SHARE_ARN="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-6C4D2D0F"
+aws --profile ${PROFILE} storagegateway \
+    notify-when-uploaded \
+        --file-share-arn ${FILE_SHARE_ARN};
+```
+
+
