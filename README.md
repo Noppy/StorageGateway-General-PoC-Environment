@@ -1059,6 +1059,7 @@ export PROFILE=default
 ```
 #### (iii) 構成情報の取得
 ```shell
+export PROFILE=default
 #構成情報取得
 VPCID=$(aws --profile ${PROFILE} --output text \
     cloudformation describe-stacks \
