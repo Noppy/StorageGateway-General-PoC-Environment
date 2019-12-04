@@ -605,7 +605,27 @@ aws --profile ${PROFILE} \
         --port 20048 \
         --source-group ${CLIENT_SG_ID} ;
 ```
-### (6)-(b) StorageGateway用S3バケット作成
+
+### (6)-(b) KMSキー作成
+S3暗号化用のKMSのCMK(Customer Master Key)を作成します。キーポリシーはIAMロール作成後に設定します。
+```shell
+KEY_ID=$( \
+aws --profile ${PROFILE} --output text \
+    kms create-key \
+	    --description "CMK for S3 buckets" \
+	    --origin AWS_KMS \
+	--query 'KeyMetadata.KeyId' )
+
+aws --profile ${PROFILE} \
+    kms create-alias \
+	    --alias-name alias/Key_For_S3Buckets \
+	    --target-key-id ${KEY_ID}
+
+```
+
+
+### (6)-(c) StorageGateway用S3バケット作成
+#### (i) バケット作成
 ```shell
 BUCKET_NAME="storagegw-bucket-$( od -vAn -to1 </dev/urandom  | tr -d " " | fold -w 10 | head -n 1)"
 REGION=$(aws --profile ${PROFILE} configure get region)
@@ -615,7 +635,44 @@ aws --profile ${PROFILE} \
         --bucket ${BUCKET_NAME} \
         --create-bucket-configuration LocationConstraint=${REGION};
 ```
-### (6)-(c) StorageGateway ファイル共有-S3アクセス用 IAMRole作成
+
+#### (ii) バケットポリシー設定
+特定のCMKでの暗号化を強制するバケットポリシーを設定します。
+```shell
+#情報の収集
+#BUCKET_NAME=<バケット名を設定>
+KEY_ARN=$(aws --profile ${PROFILE} --output text \
+    kms describe-key \
+        --key-id alias/Key_For_S3Buckets \
+    --query 'KeyMetadata.Arn' \
+)
+#バケットポリシーJSON生成
+POLICY='{
+    "Version": "2012-10-17",
+    "Id": "S3KeyPolicy",
+    "Statement": [
+        {
+            "Sid": "Force KMS Key",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:PutObject",
+            "Resource": "arn:aws:s3:::'"${BUCKET_NAME}"'/*",
+            "Condition": {
+                "StringNotEquals": {
+                    "s3:x-amz-server-side-encryption-aws-kms-key-id": "'"${KEY_ARN}"'"
+                }
+            }
+        }
+    ]
+}'
+#バケットポリシー設定
+aws --profile ${PROFILE} s3api \
+    put-bucket-policy \
+        --bucket ${BUCKET_NAME} \
+        --policy "${POLICY}"
+```
+
+### (6)-(d) StorageGateway ファイル共有-S3アクセス用 IAMRole作成
 ```shell
 POLICY='{
   "Version": "2012-10-17",
@@ -708,7 +765,8 @@ aws --profile ${PROFILE} \
         --policy-document "${POLICY}";
 
 ```
-### (6)-(d) StorageGateway管理用Roleに上記IAMのPassRole権限付与
+
+### (6)-(e) StorageGateway管理用Roleに上記IAMのPassRole権限付与
 
 ```shell
 S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
@@ -738,7 +796,72 @@ aws --profile ${PROFILE} \
         --policy-name "PassRole" \
         --policy-document "${POLICY}";
 ```
-### (6)-(e) NTP接続不可回避用のRoute53 Private Hosted Zone設定
+
+### (6)-(e) CMKキーポリシー設定
+
+```shell
+#情報取得
+ADMIN_ARN=$(aws --profile ${PROFILE} --output text \
+    sts get-caller-identity --query 'Arn')
+
+ACCOUNT_ID=$(aws --profile ${PROFILE} --output text \
+    sts get-caller-identity --query 'Account')
+
+S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
+    iam get-role \
+        --role-name "StorageGateway-S3AccessRole" \
+    --query 'Role.Arn') ;
+
+KEY_ARN=$( aws --profile ${PROFILE} --output text \
+    kms describe-key \
+        --key-id "alias/Key_For_S3Buckets"  \
+    --query 'KeyMetadata.Arn')
+
+#キーポリシー用JSON作成
+POLICY='{
+    "Version": "2012-10-17",
+    "Id": "key-default-1",
+    "Statement": [
+        {
+            "Sid": "Administrator",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "'"${ADMIN_ARN}"'",
+                    "arn:aws:iam::'"${ACCOUNT_ID}"':role/OrganizationAccountAccessRole"
+                ]
+            },
+            "Action": "kms:*",
+            "Resource": "*"
+        },
+        {
+            "Sid": "User",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "'"${S3AccessRole_ARN}"'"
+                ]
+            },
+            "Action": [
+                "kms:DescribeKey",
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+            ],
+            "Resource": "*"
+        }
+    ]
+}'
+
+#キーポリシー設定
+aws --profile ${PROFILE} \
+    kms put-key-policy \
+        --key-id "${KEY_ARN}" \
+        --policy-name "default" \
+        --policy "${POLICY}" \
+        --no-bypass-policy-lockout-safety-check ;
+```
+
+### (6)-(f) NTP接続不可回避用のRoute53 Private Hosted Zone設定
 ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
 )である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
 ```shell
@@ -1095,7 +1218,11 @@ ROLEARN=$(aws --profile  ${PROFILE} --output text \
 
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
 CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
-echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
+KEY_ARN=$( aws --profile ${PROFILE} --output text \
+    kms describe-key \
+        --key-id "alias/Key_For_S3Buckets"  \
+    --query 'KeyMetadata.Arn')
+echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}\nKEY_ARN=${KEY_ARN}"
 ```
 ### (8)-(b)ファイル共有(NFS)の作成
 ```shell
@@ -1117,7 +1244,9 @@ aws --profile ${PROFILE} storagegateway \
         --role "${ROLEARN}" \
         --nfs-file-share-defaults "${FILE_SHARE_DEFAULT_JSON}" \
         --client-list "0.0.0.0/0" \
-        --squash "RootSquash" ;
+        --squash "RootSquash" \
+        --kms-encrypted \
+        --kms-key ${KEY_ARN} ;
 ```
 
 ### (8)-(c) Linuxクライアントからの接続
