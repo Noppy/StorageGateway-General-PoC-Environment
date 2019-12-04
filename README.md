@@ -476,6 +476,7 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" ;
 ```
 ### (5)-(e) Manager(Linux)の作成
+ファイルゲートウェイのアクティベーション作業を行う管理インスタンスを起動します。
 ```shell
 #インスタンスタイプ設定
 INSTANCE_TYPE="t2.micro"
@@ -767,7 +768,7 @@ aws --profile ${PROFILE} \
 ```
 
 ### (6)-(e) StorageGateway管理用Roleに上記IAMのPassRole権限付与
-
+この後のStorageGatewayのファイル共有作成時(CreateSmbFileShare)に、ファイル共有からS3にPUT/GETするためのIAMロールを指定し割り当ています。この作業時に管理者のIAM権限としてeにPassRoleのアクションを許可する必要があります。
 ```shell
 S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
     iam get-role \
@@ -797,8 +798,7 @@ aws --profile ${PROFILE} \
         --policy-document "${POLICY}";
 ```
 
-### (6)-(e) CMKキーポリシー設定
-
+### (6)-(f) CMKキーポリシー設定
 ```shell
 #情報取得
 ADMIN_ARN=$(aws --profile ${PROFILE} --output text \
@@ -861,7 +861,7 @@ aws --profile ${PROFILE} \
         --no-bypass-policy-lockout-safety-check ;
 ```
 
-### (6)-(f) NTP接続不可回避用のRoute53 Private Hosted Zone設定
+### (6)-(g) NTP接続不可回避用のRoute53 Private Hosted Zone設定
 ファイルゲートウェイに設定されているNTPサーバ(同期先)は、インターネット上のNTPサーバ(x.amazon.pool.ntp.org
 )である。そのためファイルゲートウェイを、インターネット接続ができない環境に設置した場合、時刻同期処理を行うことができない。そこで、Route53のPrivate Hosted Zoneを活用し、x.amazon.pool.ntp.orgのアクセス先をAWS time sync(169.254.169.123)にアクセスするようにさせる
 ```shell
