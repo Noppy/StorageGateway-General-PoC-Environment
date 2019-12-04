@@ -1388,7 +1388,7 @@ echo -e "VPCID=$VPCID\nPublicSubnet2Id=${PublicSubnet2Id}\nPrivateSubnet1Id=$Pri
 AD_NAME="sgwpoc.local"
 AD_EDITION="Standard"           #Enterprise or Standard
 KEYNAME="CHANGE_KEY_PAIR_NAME"  #環境に合わせてキーペア名を設定してください。 
-AD_PASSWORD="$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)${RANDOM}"
+AD_PASSWORD="$( cat /dev/urandom | base64 |tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)${RANDOM}"
 
 #パスワードを控える
 echo ${AD_PASSWORD}  #￥表示されたパスワードは後の手順で利用するためメモしておく
