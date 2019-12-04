@@ -1461,7 +1461,8 @@ aws --profile ${PROFILE} \
 ### (10)-(c) AD管理用のWindows-AD-MgrへのAD管理ツールセットアップとAD参加
 * Windows-AD-MgrにRDPでログインする
 * AD管理に必要なツールをPowerShellでインストールする
-```shell
+```ps1
+Import-Module ServerManager;
 Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server
 ```
 詳細はこちらを参照：https://docs.aws.amazon.com/ja_jp/directoryservice/latest/admin-guide/microsoftadbasestep3.html
