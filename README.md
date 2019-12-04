@@ -812,6 +812,12 @@ S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
         --role-name "StorageGateway-S3AccessRole" \
     --query 'Role.Arn') ;
 
+STORAGEGW_ADMIN_ROLE_ARN=$(aws --profile ${PROFILE} --output text \
+    iam get-role \
+        --role-name "Ec2-StorageGW-AdminRole" \
+    --query 'Role.Arn') ;
+
+
 KEY_ARN=$( aws --profile ${PROFILE} --output text \
     kms describe-key \
         --key-id "alias/Key_For_S3Buckets"  \
@@ -828,6 +834,7 @@ POLICY='{
             "Principal": {
                 "AWS": [
                     "'"${ADMIN_ARN}"'",
+                    "'"${STORAGEGW_ADMIN_ROLE_ARN}"'",
                     "arn:aws:iam::'"${ACCOUNT_ID}"':role/OrganizationAccountAccessRole"
                 ]
             },
