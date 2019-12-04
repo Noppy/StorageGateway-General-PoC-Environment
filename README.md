@@ -1259,9 +1259,9 @@ aws --profile ${PROFILE} storagegateway \
 
 ### (8)-(c) Linuxクライアントからの接続
 作業端末から、Linuxクライアントに接続し、NFSマウントを実行します。
-```shell
-以後の作業で、Linux-Clientを利用するため、sshログインとセットアップを行います。
+
 #### (i) 作業端末からMgr-Linuxへのログイン(ここではMAC前提)
+以後の作業で、Linux-Clientを利用するため、sshログインとセットアップを行います。
 ```shell
 LinuxClinetIP=$(aws --profile ${PROFILE} --output text \
     ec2 describe-instances  \
