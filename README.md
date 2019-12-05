@@ -1784,7 +1784,7 @@ aws --profile ${PROFILE} sns \
 ```
 ### (iii)リフレッシュ実行
 ```shell
-FILE_SHARE_ARN="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-6C4D2D0F"
+FILE_SHARE_ARN="<操作したいファイル共有のARNを指定する>"
 FOLDER_LIST='/'
 
 #リフレッシュの実行(デフォルトの動作)
@@ -1840,10 +1840,10 @@ aws --profile ${PROFILE} events \
 
 #### (ii) アップロード完了通知設定
 ```shell
-#Notificationの設定
-#何らかファイルコピー実行と同時に、下記のnotify-when-uploadedを実行
+#必要に応じ、FILE_SHARE_ARNを設定
+FILE_SHARE_ARN="<操作したいファイル共有のARNを指定する>"
 
-FILE_SHARE_ARN="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-6C4D2D0F"
+#何らかファイルコピー実行と同時に、下記のnotify-when-uploadedを実行
 aws --profile ${PROFILE} storagegateway \
     notify-when-uploaded \
         --file-share-arn ${FILE_SHARE_ARN};
