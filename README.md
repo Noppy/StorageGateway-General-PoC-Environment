@@ -1665,6 +1665,7 @@ aws --profile ${PROFILE} storagegateway \
 <img src="./Documents/Step11.png" whdth=500>
 
 ### (i)SNS準備
+以下の作業は、`AdministratorAccess`のIAMポリシーがある作業端末で実行します。
 ```shell
 EMAIL_ADDRESS='email@address'
 
