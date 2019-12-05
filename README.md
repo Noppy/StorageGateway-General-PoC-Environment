@@ -1459,21 +1459,34 @@ aws --profile ${PROFILE} \
         --tag-specifications "${TAGJSON}" ;
 ```
 ### (10)-(c) AD管理用のWindows-AD-MgrへのAD管理ツールセットアップとAD参加
-* Windows-AD-MgrにRDPでログインする
-* AD管理に必要なツールをPowerShellでインストールする
+* Windows-AD-MgrにRDPでログインします。
+* AD管理に必要なツールをPowerShellでインストールします。
 ```ps1
-Import-Module ServerManager;
+Import-Module ServerManager
 Install-WindowsFeature -Name GPMC,RSAT-AD-PowerShell,RSAT-AD-AdminCenter,RSAT-ADDS-Tools,RSAT-DNS-Server
 ```
-詳細はこちらを参照：https://docs.aws.amazon.com/ja_jp/directoryservice/latest/admin-guide/microsoftadbasestep3.html
-<br>
-ツールのセットアップが完了したら、以下の手順でドメイン参加させます。
-+ `コントロールパネル`-`ネットワーク設定`から、ネットワーク設定で優先MS `ADのDNSアドレス(IPアドレス)`を入力する
-+ `コントロールパネル`-`システム`から`コンピュータ名/ドメイン名の変更`を開き、所属グループで、`ドメイン`を選択しADの`Directory DNS name`を指定する
-+ ユーザとパスワードを聞かれたら、ユーザー`admin`、パスワードは`AD作成時に指定したパスワード`を指定する
-+ リブートすると、WIndowsがドメインに所属される
-+ `AD`の`Admin`ユーザでRPDからログインする
-+ `ServerManager`を起動し、右上のメニューバーから`tool`->`ActiveDirectory Users and Computers`を選択し、ドメインの構成情報が参照できることを確認する
+
+* 以下の手順でドメイン参加させます。
++ DNSの参照先を`ADのDNSアドレス(IPアドレス)`に変更します。
+```ps1
+Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses <ADの1つ目のIPアドレス>,<ADの2つ目のIPアドレス>
+
+#設定の確認
+Get-NetAdapter | Get-DnsClientServerAddress
+```
++ ドメイン`sgwpoc.local`に参加します。
+```ps1
+#ドメインに参加させます。実行すると adminのパスワードを聞かれるので、AD作成時(create-microsoft-ad)に設定したパスワードを入力します。
+Add-Computer -DomainName sgwpoc.local -Credential admin
+
+#有効にするためリブートします。
+Restart-Computer
+```
++ RDPで、ドメイン`sgwpoc.local`、ユーザ`Admin`でログインします。
++ Power Shellを起動し`sgwpoc.local`のドメイン情報を参照できることを確認します。
+```ps1
+ Get-ADDomain -Identity sgwpoc.local
+```
 
 ### (10)-(d) Windowsクライアントのドメイン参加
 Windows-Clientインスタンスについて、(10)-(C)と同じ手順で、ADに参加させます。
