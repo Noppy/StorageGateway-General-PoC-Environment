@@ -1574,7 +1574,11 @@ ROLEARN=$(aws --profile  ${PROFILE} --output text \
     --query 'Role.Arn')
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
 CLIENT_TOKEN=$(cat /dev/urandom | base64 | fold -w 38 | sed -e 's/[\/\+\=]/0/g' | head -n 1)
-echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}"
+KEY_ARN=$( aws --profile ${PROFILE} --output text \
+    kms describe-key \
+        --key-id "alias/Key_For_S3Buckets"  \
+    --query 'KeyMetadata.Arn')
+echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}\nKEY_ARN=${KEY_ARN}"
 
 #実行
 aws --profile ${PROFILE} storagegateway \
@@ -1586,7 +1590,9 @@ aws --profile ${PROFILE} storagegateway \
         --object-acl bucket-owner-full-control \
         --default-storage-class S3_STANDARD \
         --guess-mime-type-enabled \
-        --authentication ActiveDirectory
+        --authentication ActiveDirectory \
+        --kms-encrypted \
+        --kms-key ${KEY_ARN} ;
 ```
 #### (iv) Windows-Clientからの接続
 クライアントから接続確認します。
