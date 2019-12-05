@@ -1604,7 +1604,7 @@ net use [WindowsDriveLetter]: \\10.1.163.138\storagegw-bucket-smb-ad
 ### (11)-(a) キャッシュリフレッシュ
 #### (i)対象バケット全体をリフレッシュする
 ```shell
-FILE_SHARE_ARN="arn:aws:storagegateway:ap-northeast-1:664154733615:share/share-6C4D2D0F"
+FILE_SHARE_ARN="<操作したいファイル共有のARNを指定する>"
 FOLDER_LIST='/'
 
 #リフレッシュの実行(デフォルトの動作)
@@ -1642,6 +1642,7 @@ GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateway
 
 #アップデート状況の確認
 #"NextUpdateAvailabilityDate"と、"LastSoftwareUpdate"を確認します。
+#"NextUpdateAvailabilityDate"が表示されない場合、現時点で予定されているアップデートはありません。
 aws --profile ${PROFILE} storagegateway \
     describe-gateway-information \
         --gateway-arn ${GATEWAY_ARN};
