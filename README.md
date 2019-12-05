@@ -957,6 +957,7 @@ aws --profile ${PROFILE} \
 <img src="./Documents/Step7.png" whdth=500>
 
 ### (7)-(a) ファイルゲートウェイ・インスタンスの作成
+#### (i)インスタンスの起動
 ```shell
 # FileGatewayの最新のAMIIDを取得する
 FGW_AMIID=$(aws --profile ${PROFILE} --output text \
@@ -1022,6 +1023,36 @@ aws --profile ${PROFILE} \
         --monitoring Enabled=true ;
 
 ```
+#### (ii)AutoRecovery設定
+```shell
+#情報取得
+export REGION=ap-northeast-1
+
+GatewayInstanceID=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-instances  \
+        --filters "Name=tag:Name,Values=Fgw" "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].InstanceId' )
+
+#AutoRecovery設定
+aws --profile ${PROFILE} \
+    cloudwatch put-metric-alarm \
+        --region "${REGION}" \
+        --alarm-name "recover-ec2-instance-${GatewayInstanceID}" \
+        --alarm-description "recover-FileGateway-ec2-instance" \
+        --alarm-actions \
+            "arn:aws:automate:${REGION}:ec2:recover" \
+        --namespace AWS/EC2 \
+        --metric-name StatusCheckFailed_System \
+        --dimensions  Name=InstanceId,Value=${GatewayInstanceID} \
+        --comparison-operator GreaterThanThreshold \
+        --unit Count \
+        --statistic Average \
+        --period 60 \
+        --threshold 1 \
+        --evaluation-periods 1
+```
+
+
 ### (7)-(b) Mgr-Linuxへのログインとセットアップ
 以後の作業で、Mgr-Linuxを利用するため、sshログインとセットアップを行います。
 #### (i) 作業端末からMgr-Linuxへのログイン(ここではMAC前提)
