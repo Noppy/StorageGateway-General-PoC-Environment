@@ -1547,7 +1547,7 @@ PROFILE="default"
 #AD設定
 AD_DOMAIN_NAME="sgwpoc.local"
 AD_USER="admin"
-# AD_PASSWORD="< (10)-(a) (ii)で設定したパスワード>"
+AD_PASSWORD="< (10)-(a) (ii)で設定したパスワード>"
 
 #ゲートウェイID取得
 GATEWAY_ARN=$(aws --profile ${PROFILE} --output text storagegateway list-gateways |awk '/SgPoC-Gateway-1/{ print $4 }')
