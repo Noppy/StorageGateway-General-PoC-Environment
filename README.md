@@ -631,10 +631,30 @@ aws --profile ${PROFILE} \
 BUCKET_NAME="storagegw-bucket-$( od -vAn -to1 </dev/urandom  | tr -d " " | fold -w 10 | head -n 1)"
 REGION=$(aws --profile ${PROFILE} configure get region)
 
+#バケット作成
 aws --profile ${PROFILE} \
     s3api create-bucket \
         --bucket ${BUCKET_NAME} \
         --create-bucket-configuration LocationConstraint=${REGION};
+
+#デフォルト暗号化設定
+CONFIG='
+{
+    "Rules": [
+        {
+            "ApplyServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": "'"${KEY_ARN}"'"
+            }
+        }
+    ]
+}'
+#KMSによるデフォルト暗号化設定
+aws --profile ${PROFILE} \
+    s3api put-bucket-encryption \
+        --bucket ${BUCKET_NAME} \
+        --server-side-encryption-configuration "${CONFIG}"
+
 ```
 
 #### (ii) バケットポリシー設定
