@@ -1015,7 +1015,7 @@ BLOCK_DEVICE_MAPPINGS='[
             "DeleteOnTermination": true,
             "VolumeType": "io1",
             "Iops": 4000,
-            "VolumeSize": 350,
+            "VolumeSize": 240,
             "Encrypted": false
         }
     },
