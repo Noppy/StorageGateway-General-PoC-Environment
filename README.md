@@ -1043,6 +1043,28 @@ aws --profile ${PROFILE} \
         --monitoring Enabled=true ;
 
 ```
+
+(Option)FileGatewayのインスタンスにアタッチしているEBSのタグ付け
+```shell
+# 対象EBSボリュームのID取得
+GatewayInstanceID=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-instances  \
+        --filters "Name=tag:Name,Values=Fgw" "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].InstanceId' )
+
+VolumeIDS=$(aws --profile ${PROFILE} --output text \
+    ec2 describe-volumes \
+        --filters "Name=attachment.instance-id,Values=${GatewayInstanceID}" \
+    --query "Volumes[].VolumeId" )
+
+# EBSボリュームへのタグ付け
+aws --profile ${PROFILE} \
+    ec2 create-tags \
+        --resources ${VolumeIDS} \
+	--tags "Key=Name,Value=Fgw-vol"
+
+```
+
 #### (ii)AutoRecovery設定
 ```shell
 #情報取得
