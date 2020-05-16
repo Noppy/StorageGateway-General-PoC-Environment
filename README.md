@@ -2006,7 +2006,8 @@ aws --profile ${PROFILE} \
         --statistic Sum \
         --period 300 \
         --threshold 1 \
-        --evaluation-periods 1
+        --evaluation-periods 1 \
+        --treat-missing-data notBreaching;
 ```
 #### (iii)AvailabilityNotifications
 ```shell
@@ -2023,5 +2024,6 @@ aws --profile ${PROFILE} \
         --statistic Sum \
         --period 300 \
         --threshold 1 \
-        --evaluation-periods 1
+        --evaluation-periods 1 \
+        --treat-missing-data notBreaching;
 ```
