@@ -1076,7 +1076,7 @@ aws --profile ${PROFILE} \
 #### (ii)AutoRecovery設定
 ```shell
 #情報取得
-export REGION=ap-northeast-1
+export REGION=$(aws --profile ${PROFILE} configure get region)
 
 GatewayInstanceID=$(aws --profile ${PROFILE} --output text \
     ec2 describe-instances  \
