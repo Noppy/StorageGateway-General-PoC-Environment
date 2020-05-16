@@ -631,6 +631,14 @@ aws --profile ${PROFILE} \
 BUCKET_NAME="storagegw-bucket-$( od -vAn -to1 </dev/urandom  | tr -d " " | fold -w 10 | head -n 1)"
 REGION=$(aws --profile ${PROFILE} configure get region)
 
+#情報の収集
+#BUCKET_NAME=<バケット名を設定>
+KEY_ARN=$(aws --profile ${PROFILE} --output text \
+    kms describe-key \
+        --key-id alias/Key_For_S3Buckets \
+    --query 'KeyMetadata.Arn' \
+)
+
 #バケット作成
 aws --profile ${PROFILE} \
     s3api create-bucket \
