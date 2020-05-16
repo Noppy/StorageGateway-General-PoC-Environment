@@ -1269,8 +1269,8 @@ GATEWAY_ARN=$(aws --output text storagegateway list-gateways |awk '/SgPoC-Gatewa
 #AccuntId=$(curl -s http://169.254.169.254/latest/meta-data/identity-credentials/ec2/info|awk '/AccountId/{ i=gsub( /"/, "", $3); print $3}')
 echo "GATEWAY_ARN=$GATEWAY_ARN  Region=${Region} AccuntId=${AccuntId}"
 
-#CloudWatch Logsログストリーム作成
-LOG_GROUP_NAME=${SgPoC-Gateway-1}
+#CloudWatch Logsロググループ作成
+LOG_GROUP_NAME="/aws/storagegateway/${SgPoC-Gateway-1}"
 aws --profile ${PROFILE} \
     logs create-log-group \
         --log-group-name ${LOG_GROUP_NAME};
@@ -1395,6 +1395,7 @@ aws --profile ${PROFILE} storagegateway \
 ```
 ### (9)-(c) SMBファイル共有
 上記(6)で作成したS3バケット以外のバケットを利用する場合は、(6)-(c)で作成した、"StorageGateway-S3AccessRole"ロールのリソース句に該当のS3バケットを追加してください。
+#### (i) 事前情報設定
 ```shell
 #情報取得
 BUCKET_NAME=<バケット名を個別に設定>
@@ -1412,9 +1413,11 @@ KEY_ARN=$( aws --profile ${PROFILE} --output text \
         --key-id "alias/Key_For_S3Buckets"  \
     --query 'KeyMetadata.Arn')
 echo -e "BUCKET=${BUCKETARN}\nROLE_ARN=${ROLEARN}\nGATEWAY_ARN=${GATEWAY_ARN}\nCLIENT_TOKEN=${CLIENT_TOKEN}\nKEY_ARN=${KEY_ARN}"
-
+```
+#### (ii)SMB ファイル共有の作成
+```shell
 #実行
-aws --profile ${PROFILE} storagegateway \
+SMB_FILE_SHARE_ARN=$(aws --profile ${PROFILE} --output text storagegateway \
     create-smb-file-share \
         --client-token ${CLIENT_TOKEN} \
         --gateway-arn "${GATEWAY_ARN}" \
@@ -1425,7 +1428,31 @@ aws --profile ${PROFILE} storagegateway \
         --guess-mime-type-enabled \
         --authentication GuestAccess \
         --kms-encrypted \
-        --kms-key ${KEY_ARN} ;
+        --kms-key ${KEY_ARN} );
+```
+#### (iii) SMBアクセス監査のCloudWatch Logs出力設定
+```shell
+SMB_FILE_SHARE_ID=$( aws --profile ${PROFILE} --output text storagegateway \
+    describe-smb-file-shares \
+        --file-share-arn-list ${SMB_FILE_SHARE_ARN} \
+    --query 'SMBFileShareInfoList[].FileShareId')
+
+#CloudWatch Logsロググループ作成
+LOG_GROUP_NAME="/aws/storagegateway/${SMB_FILE_SHARE_ID}"
+aws --profile ${PROFILE} \
+    logs create-log-group \
+        --log-group-name ${LOG_GROUP_NAME};
+
+LOG_GROUP_ARN=$(aws --profile ${PROFILE} --output text \
+    logs describe-log-groups \
+        --log-group-name-prefix ${LOG_GROUP_NAME} \
+    --query 'logGroups[].arn' );
+
+#監査ログの設定
+aws --profile ${PROFILE} \
+    storagegateway update-smb-file-share \
+        --file-share-arn ${SMB_FILE_SHARE_ARN} \
+        --audit-destination-arn ${LOG_GROUP_ARN}
 ```
 ### (9)-(d) Windows-ClinetからのSMBアクセス
 Windows ClinetにRDPログインし、SMB接続をします。
