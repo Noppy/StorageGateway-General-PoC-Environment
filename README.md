@@ -1984,4 +1984,44 @@ aws --profile ${PROFILE} storagegateway \
         --file-share-arn ${FILE_SHARE_ARN};
 ```
 
-
+### (11)-(e) ゲートウェイの「ヘルス通知」をCloudWatch Alarmにより通知する
+ストレージゲートウェイには、ヘルス通知としてHealthNotificationsとAvailabilityNotificationsの２つのメトリクスが存在する。これらのメトリクスは、Logsへ通知したログ件数に関するメトリクスである。これらメトリクスをCloudWatch Alarmを利用し出力があったことを通知する構成を組んでみる。ここでは別途準備しているSNSトピック(手順対象外)に通知する設定をする。
+#### (i)事前設定
+```shell
+GATEWAY_NAME="SgPoC-Gateway-1"
+SNS_TOPIC_ARN="<事前に作成したSNS TopicのARN>"
+```
+#### (ii)HealthNotifications
+```shell
+aws --profile ${PROFILE} \
+    cloudwatch put-metric-alarm \
+        --alarm-name "${GATEWAY_NAME}-HealthNotifications" \
+        --alarm-description "Alarm when ${GATEWAY_NAME}-HealthNotifications is 1 or more." \
+        --alarm-actions ${SNS_TOPIC_ARN} \
+        --namespace AWS/StorageGateway \
+        --metric-name HealthNotifications \
+        --dimensions  Name=GatewayName,Value=${GATEWAY_NAME} \
+        --comparison-operator GreaterThanThreshold \
+        --unit Count \
+        --statistic Sum \
+        --period 300 \
+        --threshold 1 \
+        --evaluation-periods 1
+```
+#### (iii)AvailabilityNotifications
+```shell
+aws --profile ${PROFILE} \
+    cloudwatch put-metric-alarm \
+        --alarm-name "${GATEWAY_NAME}-AvailabilityNotifications" \
+        --alarm-description "Alarm when ${GATEWAY_NAME}-AvailabilityNotifications is 1 or more." \
+        --alarm-actions ${SNS_TOPIC_ARN} \
+        --namespace AWS/StorageGateway \
+        --metric-name AvailabilityNotifications \
+        --dimensions  Name=GatewayName,Value=${GATEWAY_NAME} \
+        --comparison-operator GreaterThanThreshold \
+        --unit Count \
+        --statistic Sum \
+        --period 300 \
+        --threshold 1 \
+        --evaluation-periods 1
+```
