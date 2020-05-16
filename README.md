@@ -796,7 +796,7 @@ aws --profile ${PROFILE} \
 ```
 
 ### (6)-(e) StorageGateway管理用Roleに上記IAMのPassRole権限付与
-この後のStorageGatewayのファイル共有作成時(CreateSmbFileShare)に、ファイル共有からS3にPUT/GETするためのIAMロールを指定し割り当ています。この作業時に管理者のIAM権限としてeにPassRoleのアクションを許可する必要があります。
+この後のStorageGatewayのファイル共有作成時(CreateSmbFileShare)に、ファイル共有からS3にPUT/GETするためのIAMロールを指定し割り当ています。この作業時に管理者のIAM権限としてPassRoleのアクションを許可する必要があります。
 ```shell
 S3AccessRole_ARN=$(aws --profile ${PROFILE} --output text \
     iam get-role \
