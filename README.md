@@ -1668,7 +1668,7 @@ aws --profile ${PROFILE} \
         --user-name ${AD_USER} \
         --password ${AD_PASSWORD} ; 
 ```
-### SMBファイル共有(AD認証)の作成
+### (10)-(f)SMBファイル共有(AD認証)の作成
 上記(6)で作成したS3バケット以外のバケットを利用する場合は、(6)-(c)で作成した、"StorageGateway-S3AccessRole"ロールのリソース句に該当のS3バケットを追加してください。
 #### (i) 事前情報設定
 ```shell
@@ -1729,7 +1729,7 @@ aws --profile ${PROFILE} \
         --file-share-arn ${SMB_FILE_SHARE_ARN} \
         --audit-destination-arn ${LOG_GROUP_ARN}
 ```
-### Windows-Clientからの接続
+### (10)-(g)Windows-Clientからの接続
 クライアントから接続確認します。
 ```shell
 net use [WindowsDriveLetter]: \\10.1.163.138\storagegw-bucket-smb-ad
